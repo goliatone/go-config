@@ -1,6 +1,7 @@
 package solvers
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"os"
@@ -62,10 +63,14 @@ func (s uris) keypath(key, val string, config *koanf.Koanf) {
 	end = end + len(s.delimeters.End)
 	uri := val[end:]
 
-	// TODO: need to implement
+	// TODO: need to implement a way to dynamically register solvers
 	switch protocol {
 	case "file":
 		if content, err := SolveFileProtocol(s.fs, uri); err == nil {
+			config.Set(key, content)
+		}
+	case "base64":
+		if content, err := SolveBase64DecodeProtocol(s.fs, uri); err == nil {
 			config.Set(key, content)
 		}
 	default:
@@ -81,4 +86,12 @@ func SolveFileProtocol(f fs.FS, uri string) (string, error) {
 		content = strings.TrimRight(content, "\n")
 	}
 	return content, err
+}
+
+func SolveBase64DecodeProtocol(f fs.FS, uri string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(uri)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
