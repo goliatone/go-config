@@ -78,6 +78,9 @@ function dev:env:load {
     eval "$(envset development --isolated=true)"
 }
 
+function dev:test {
+    lgr exec -- go test -v ./... || exit 1
+}
 
 ##
 ## ########################################
@@ -228,7 +231,7 @@ function help {
 
     prog="$0"
     me=$(basename "$prog")
-    
+
     grep -e '^##[[:space:]]' -e '^##$' "$prog" | sed -e 's/^##//' -e "s/_PROG_/$me/" 2>&1 | less
 }
 
