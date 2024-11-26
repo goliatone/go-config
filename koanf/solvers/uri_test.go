@@ -12,6 +12,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestKSolver_base64(t *testing.T) {
+	defaultValues := map[string]interface{}{
+		"password": "@base64://I3B3MTI7UmFkZCRhLjI0Mw==",
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewURISolver("@", "://")
+	out := solver.Solve(k)
+
+	expected := "#pw12;Radd$a.243"
+
+	assert.Equal(
+		t,
+		expected,
+		out.Get("password"),
+	)
+}
+
 func TestKSolver_URLs(t *testing.T) {
 	notMatching := "@file://nothing"
 	defaultValues := map[string]interface{}{
