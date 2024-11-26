@@ -16,7 +16,7 @@ type Env struct {
 	out    string
 }
 
-// Provider works like built it env provider but with support for
+// Provider works like built in env provider but with support for
 // arrays:
 // APP_DATABASE__0__PASSWORD=password_1
 // APP_DATABASE__1__PASSWORD=password_2

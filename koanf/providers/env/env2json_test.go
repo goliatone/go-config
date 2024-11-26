@@ -106,6 +106,86 @@ func TestProviderWithCallback(t *testing.T) {
 	assert.JSONEq(t, `{"database":{"password":"password"}}`, string(data))
 }
 
+func TestProviderWithCallback_format(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   string
+		delim    string
+		envVars  map[string]string
+		expected string
+	}{
+		{
+			name:   "Single key",
+			prefix: "TEST_",
+			delim:  "__",
+			envVars: map[string]string{
+				"TEST_DATABASE__PASSWORD": "password",
+			},
+			expected: `{"database":{"password":"password"}}`,
+		},
+		{
+			name:   "Array handling",
+			prefix: "TEST_",
+			delim:  "__",
+			envVars: map[string]string{
+				"TEST_DATABASE__0__PASSWORD": "password_1",
+				"TEST_DATABASE__1__PASSWORD": "password_2",
+				"TEST_DATABASE__2__PASSWORD": "password_3",
+			},
+			expected: `{"database":[{"password":"password_1"},{"password":"password_2"},{"password":"password_3"}]}`,
+		},
+		{
+			name:   "Nested keys",
+			prefix: "TEST_",
+			delim:  "__",
+			envVars: map[string]string{
+				"TEST_PARENT__CHILD__KEY": "value",
+			},
+			expected: `{"parent":{"child":{"key":"value"}}}`,
+		},
+		{
+			name:   "Prefix filtering",
+			prefix: "TEST_",
+			delim:  "__",
+			envVars: map[string]string{
+				"TEST_KEY":         "app_value",
+				"OTHER_KEY":        "other_value",
+				"TEST_OTHER__KEY":  "app_other_value",
+				"OTHER_OTHER__KEY": "other_other_value",
+			},
+			expected: `{"key":"app_value","other":{"key":"app_other_value"}}`,
+		},
+		{
+			name:   "Multiple objects",
+			prefix: "TEST_",
+			delim:  "__",
+			envVars: map[string]string{
+				"TEST_DATABASE__0__HOST": "primary.db",
+				"TEST_DATABASE__0__PORT": "5432",
+				"TEST_DATABASE__1__HOST": "replica.db",
+				"TEST_DATABASE__1__PORT": "5432",
+			},
+			expected: `{"database":[{"host":"primary.db","port":"5432"},{"host":"replica.db","port":"5432"}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			for key, value := range tt.envVars {
+				setEnv(t, key, value)
+				defer unsetEnv(t, key)
+			}
+			provider := Provider("TEST_", "__", func(s string) string {
+				return strings.ToLower(strings.Replace(s, "TEST_", "", 1))
+			})
+			data, err := provider.ReadBytes()
+			assert.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
 func TestProviderWithValue(t *testing.T) {
 	setEnv(t, "TEST_DATABASE__PASSWORD", "password")
 	defer unsetEnv(t, "TEST_DATABASE__PASSWORD")
