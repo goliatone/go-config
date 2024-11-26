@@ -21,22 +21,22 @@ func NewVariablesSolver(s, e string) ConfigSolver {
 }
 
 // Solve will transform a configuration object
-func (s variables) Solve(context *koanf.Koanf) *koanf.Koanf {
+func (s variables) Solve(config *koanf.Koanf) *koanf.Koanf {
 
-	c := context.All()
+	c := config.All()
 
 	for key, val := range c {
 		v2, ok := val.(string)
 		if !ok {
 			continue
 		}
-		s.keypath(key, v2, context)
+		s.keypath(key, v2, config)
 	}
 
-	return context
+	return config
 }
 
-func (s variables) keypath(key, val string, context *koanf.Koanf) {
+func (s variables) keypath(key, val string, config *koanf.Koanf) {
 	start := strings.Index(val, s.delimeters.Start)
 	if start == -1 {
 		return
@@ -57,16 +57,16 @@ func (s variables) keypath(key, val string, context *koanf.Koanf) {
 		return
 	}
 
-	if !context.Exists(path) {
+	if !config.Exists(path) {
 		return
 	}
 
-	newVal := context.Get(path)
+	newVal := config.Get(path)
 	if len(s.delimeters.Start)+len(path)+len(s.delimeters.End) != len(val) {
 		newVal = s.replaceValue(val, newVal)
 	}
 
-	context.Set(key, newVal)
+	config.Set(key, newVal)
 }
 
 func (s variables) replaceValue(input string, replacement any) string {
