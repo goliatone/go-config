@@ -190,3 +190,15 @@ This produces a JSON structure like this:
     }]
 }
 ```
+
+
+#### Merge
+
+##### IngoringNullValues
+
+```go
+k.Load(env.Provider(EnvPrefix, "__", func(s string) string {
+    return strings.Replace(strings.ToLower(
+        strings.TrimPrefix(s, EnvPrefix)), EnvLevel, ".", -1)
+}), json.Parser(), koanf.WithMergeFunc(mergeIgnoringNullValues))
+```
