@@ -80,13 +80,14 @@ varSolver := solvers.NewVariablesSolver("{{", "}}")
 
 ##### `file`
 
-The URI solver Will let you use a reference to a file and resolve the value on loading:
+The `file` solver will let you use a reference to a file and resolve the value on loading:
 
 ```json
 {
     "version": "@file://verstion.text"
 }
 ```
+
 Will replace the reference with the contents of the **version.txt** file:
 
 ```json
@@ -95,7 +96,7 @@ Will replace the reference with the contents of the **version.txt** file:
 }
 ```
 
-You can provide a custom filesystem implementation for the URI file solver:
+You can provide a custom `filesystem` implementation for the URI file solver:
 
 ```go
 CopycustomFS := os.DirFS("./configs")
@@ -109,6 +110,23 @@ You can use custom delimiters:
 uriSolver := solvers.NewURISolver("->", "://")
 ```
 
+##### `base64`
+
+The `base64` solver will let you encode a value using base64 and solve the value on load. This is helpful in situations in which you might have characters that could break your environment variables.
+
+```json
+{
+    "password": "@base64://I3B3MTI7UmFkZCRhLjI0Mw=="
+}
+```
+
+Will replace the reference with the decoded value of the variable:
+
+```json
+{
+    "password": "#pw12;Radd$a.243"
+}
+```
 
 ### Providers
 
