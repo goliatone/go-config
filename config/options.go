@@ -1,0 +1,43 @@
+package config
+
+import (
+	"fmt"
+
+	"github.com/goliatone/go-config/koanf/solvers"
+)
+
+type Option[C Validable] func(c *Container[C]) error
+
+func WithValidation[C Validable](v bool) Option[C] {
+	return func(c *Container[C]) error {
+		c.mustValidate = v
+		return nil
+	}
+}
+
+func WithConfigPath[C Validable](p string) Option[C] {
+	return func(c *Container[C]) error {
+		c.configPath = p
+		return nil
+	}
+}
+
+func WithSolver[C Validable](srcs ...solvers.ConfigSolver) Option[C] {
+	return func(c *Container[C]) error {
+		c.solvers = append(c.solvers, srcs...)
+		return nil
+	}
+}
+
+func WithProvider[C Validable](factories ...ProviderFactory[C]) Option[C] {
+	return func(c *Container[C]) error {
+		for _, factory := range factories {
+			provider, err := factory(c)
+			if err != nil {
+				return fmt.Errorf("failed to create provider: %w", err)
+			}
+			c.providers = append(c.providers, provider)
+		}
+		return nil
+	}
+}
