@@ -9,19 +9,24 @@ This package is a collection of utilities, extensions, and helpers meant to ease
 The solvers package provides variable post-processing for [koanf](https://github.com/knadh/koanf).
 
 ```go
+import (
+    "github.com/goliatone/go-config/solvers"
+    "github.com/knadh/koanf/v2"
+)
+
 var k = koanf.New(".")
 
 func main() {
-    solvers := []solvers.ConfigSolver{
-        ksolvers.NewVariablesSolver("${", "}"),
-        ksolvers.NewURLSolver("@", "://"),
+    slvrs := []solvers.ConfigSolver{
+        solvers.NewVariablesSolver("${", "}"),
+        solvers.NewURLSolver("@", "://"),
     }
 
     if err := k.Load(file.Provider("config/cofig.json"), json.Parser()); err != nil {
 		log.Fatalf("error loading config: %v", err)
 	}
 
-    for _, solver := range solvers {
+    for _, solver := range slvrs {
         solver.Solve(k)
     }
 }
