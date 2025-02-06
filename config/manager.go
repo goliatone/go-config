@@ -20,7 +20,7 @@ type Validable interface {
 type Container[C Validable] struct {
 	K            *koanf.Koanf
 	base         C
-	providers    []Provider
+	providers    []Loader
 	mustValidate bool
 	strictMerge  bool
 	loadTimeout  time.Duration
@@ -48,6 +48,17 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply option %d: %w", i, err)
 		}
+	}
+
+	// providers could have been set via options
+	if len(mgr.providers) == 0 && mgr.configPath != "" {
+		fmt.Println("no providers just load default")
+		f := OptionalProvider(FileProvider[C](mgr.configPath))
+		p, err := f(mgr)
+		if err != nil {
+			return nil, fmt.Errorf("error creating default loader: %w", err)
+		}
+		mgr.providers = append(mgr.providers, p)
 	}
 
 	for _, src := range mgr.providers {
