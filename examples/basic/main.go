@@ -5,22 +5,35 @@ import (
 	"fmt"
 
 	"github.com/goliatone/go-config/config"
-	"github.com/goliatone/go-print"
 )
 
 type App struct {
-	Name     string   `koanf:"app"`
-	Env      string   `koanf:"env"`
-	Database Database `koanf:"database"`
-	config   *config.Container[*App]
+	Name     string `koanf:"name"`
+	Env      string `koanf:"env"`
+	Version  string `koanf:"version"`
+	Database struct {
+		DSN string `koanf:"dsn"`
+	} `koanf:"database"`
+	Server struct {
+		Env string `koanf:"env"`
+	} `koanf:"server"`
+	config *config.Container[*App]
 }
 
 func (c App) Validate() error {
-	return nil
-}
+	if c.Env == "" || c.Name == "" || c.Version == "" {
+		return fmt.Errorf("missing required app config values")
+	}
 
-type Database struct {
-	DSN string `koanf:"dsn"`
+	if c.Database.DSN == "" {
+		return fmt.Errorf("missing required database config values")
+	}
+
+	if c.Server.Env == "" {
+		return fmt.Errorf("missing required server config values")
+	}
+
+	return nil
 }
 
 func main() {
@@ -39,7 +52,6 @@ func main() {
 	app.config = config
 
 	fmt.Println("====== APP ======")
-	fmt.Println(print.MaybePrettyJSON(app.config.K.All()))
 	fmt.Println(app.Name)
 	fmt.Println(app.Env)
 	fmt.Println(app.Database.DSN)
