@@ -15,13 +15,13 @@ func TestInferConfigFiletype(t *testing.T) {
 		path     string
 		expected ConfigFileType
 	}{
-		{"testdata/config.json", FileTypeJSON},
-		{"testdata/config.yaml", FileTypeYAML},
-		{"testdata/config.yml", FileTypeYAML},
-		{"testdata/config.toml", FileTypeTOML},
+		{"testdata/fileparser/config.json", FileTypeJSON},
+		{"testdata/fileparser/config.yaml", FileTypeYAML},
+		{"testdata/fileparser/config.yml", FileTypeYAML},
+		{"testdata/fileparser/config.toml", FileTypeTOML},
 		// unknown extension should default to JSON
 		// unless a default is provided
-		{"testdata/config.unknown", FileTypeJSON},
+		{"testdata/fileparser/config.unknown", FileTypeJSON},
 	}
 
 	for _, tt := range tests {
@@ -45,9 +45,9 @@ func TestParserForConfigFiles(t *testing.T) {
 		expectedType ConfigFileType
 		expectedKey  string
 	}{
-		{"config.json", FileTypeJSON, "jsonValue"},
-		{"config.yaml", FileTypeYAML, "yamlValue"},
-		{"config.toml", FileTypeTOML, "tomlValue"},
+		{"fileparser/config.json", FileTypeJSON, "jsonValue"},
+		{"fileparser/config.yaml", FileTypeYAML, "yamlValue"},
+		{"fileparser/config.toml", FileTypeTOML, "tomlValue"},
 	}
 
 	for _, tt := range tests {
