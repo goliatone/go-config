@@ -14,9 +14,13 @@ import (
 type testApp struct {
 	Name     string `koanf:"name"`
 	Env      string `koanf:"env"`
+	Version  string `koanf:"version"`
 	Database struct {
 		DSN string `koanf:"dsn"`
 	} `koanf:"database"`
+	Server struct {
+		Env string `koanf:"env"`
+	} `koanf:"server"`
 }
 
 func (a testApp) Validate() error {
