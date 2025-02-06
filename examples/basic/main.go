@@ -54,5 +54,6 @@ func main() {
 	fmt.Println("====== APP ======")
 	fmt.Println(app.Name)
 	fmt.Println(app.Env)
+	fmt.Println(app.Version)
 	fmt.Println(app.Database.DSN)
 }
