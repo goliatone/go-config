@@ -1,0 +1,11 @@
+{
+  "name": "TestApp",
+  "env": "testing",
+  "version": "@file://testdata/version.txt",
+  "database": {
+    "dsn": "test-dsn"
+  },
+  "server": {
+    "env": "${env}"
+  }
+}

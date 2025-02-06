@@ -1,33 +1,122 @@
 # Go Config
 
-This package is a collection of utilities, extensions, and helpers meant to ease working with different golang configuration libraries.
+This package is a collection of utilities, extensions, and helpers meant to ease configuration management for Go applications using [koanf](https://github.com/knadh/koanf).
 
-## Koanf
+## Installation
 
-### Solvers
+To install the package, run:
+
+```sh
+go get github.com/goliatone/go-config
+```
+
+**Note**: This project requires Go 1.18+ for generics support.
+
+## Manager
+
+The manager container is a flexible configuration package for Go that loads configuration values from multiple sources (files, environment variables, command-line flags, and in-code structs). It supports merging, validation, and even variable substitution through configurable solvers.
+
+### Features
+- Multi-Source Loading: Load configuration from JSON, YAML, or TOML files, environment variables, command-line flags, or directly from Go structs.
+- Validation: Each configuration struct can implement a `Validate()` method to enforce required rules.
+- Flexible Merging: Loaders are applied in a defined order so that later sources override earlier values.
+- Optional Loaders: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
+- Solvers: Built-in support for variable substitution (e.g. env vars) and URI solving.
+- Simple API: A single Container ties everything together, making it easy to initialize and access your configuration.
+
+### Example
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/goliatone/go-config/config"
+)
+
+type App struct {
+	Name     string `koanf:"name"`
+	Env      string `koanf:"env"`
+	Version  string `koanf:"version"`
+	Database struct {
+		DSN string `koanf:"dsn"`
+	} `koanf:"database"`
+	Server struct {
+		Env string `koanf:"env"`
+	} `koanf:"server"`
+	config *config.Container[*App]
+}
+
+func (c App) Validate() error {
+	if c.Env == "" || c.Name == "" || c.Version == "" {
+		return fmt.Errorf("missing required app config values")
+	}
+
+	if c.Database.DSN == "" {
+		return fmt.Errorf("missing required database config values")
+	}
+
+	if c.Server.Env == "" {
+		return fmt.Errorf("missing required server config values")
+	}
+
+	return nil
+}
+
+func main() {
+	app := &App{}
+	config, err := config.New(app)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx := context.Background()
+
+	if err := config.Load(ctx); err != nil {
+		panic(err)
+	}
+
+	app.config = config
+
+	fmt.Println("====== APP ======")
+	fmt.Println(app.Name)
+	fmt.Println(app.Env)
+	fmt.Println(app.Database.DSN)
+}
+```
+
+
+## Solvers
 
 The solvers package provides variable post-processing for [koanf](https://github.com/knadh/koanf).
 
 ```go
+import (
+    "github.com/goliatone/go-config/solvers"
+    "github.com/knadh/koanf/v2"
+)
+
 var k = koanf.New(".")
 
 func main() {
-    solvers := []solvers.ConfigSolver{
-        ksolvers.NewVariablesSolver("${", "}"),
-        ksolvers.NewURLSolver("@", "://"),
+    slvrs := []solvers.ConfigSolver{
+        solvers.NewVariablesSolver("${", "}"),
+        solvers.NewURLSolver("@", "://"),
     }
 
     if err := k.Load(file.Provider("config/cofig.json"), json.Parser()); err != nil {
 		log.Fatalf("error loading config: %v", err)
 	}
 
-    for _, solver := range solvers {
+    for _, solver := range slvrs {
         solver.Solve(k)
     }
 }
 ```
 
-#### Variable Resolution
+### Variable Resolution
 
 Replace configuration values with references to other values in your config.
 
@@ -76,9 +165,9 @@ You can use custom delimiters:
 varSolver := solvers.NewVariablesSolver("{{", "}}")
 ```
 
-#### URI Solver
+### URI Solver
 
-##### `file`
+#### `file`
 
 The `file` solver will let you use a reference to a file and resolve the value on loading:
 
@@ -110,7 +199,7 @@ You can use custom delimiters:
 uriSolver := solvers.NewURISolver("->", "://")
 ```
 
-##### `base64`
+#### `base64`
 
 The `base64` solver will let you encode a value using base64 and solve the value on load. This is helpful in situations in which you might have characters that could break your environment variables.
 
@@ -128,9 +217,9 @@ Will replace the reference with the decoded value of the variable:
 }
 ```
 
-### Providers
+## Providers
 
-#### Env
+### Env
 Enhanced environment variable provider for [koanf](https://github.com/knadh/koanf) that extends the built-in functionality with support for arrays and nested structures through environment variables.
 
 **Features**:
@@ -140,7 +229,7 @@ Enhanced environment variable provider for [koanf](https://github.com/knadh/koan
 - Custom key/value transformations
 - Type conversion capabilities
 
-##### Basic Usage
+#### Basic Usage
 
 ```go
 import (
@@ -192,13 +281,13 @@ This produces a JSON structure like this:
 ```
 
 
-#### Merge
+### Merge
 
-##### IngoringNullValues
+#### IngoringNullValues
 
 ```go
 k.Load(env.Provider(EnvPrefix, "__", func(s string) string {
     return strings.Replace(strings.ToLower(
         strings.TrimPrefix(s, EnvPrefix)), EnvLevel, ".", -1)
-}), json.Parser(), koanf.WithMergeFunc(mergeIgnoringNullValues))
+}), json.Parser(), koanf.WithMergeFunc(config.MergeIgnoringNullValues))
 ```

@@ -1,0 +1,11 @@
+{
+  "name": "Config Test",
+  "env": "development",
+  "version": "@file://version.txt",
+  "database": {
+    "dsn": "file:temp.db?fs=true"
+  },
+  "server": {
+    "env": "${env}"
+  }
+}
