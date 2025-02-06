@@ -22,6 +22,10 @@ func WithConfigPath[C Validable](p string) Option[C] {
 	}
 }
 
+func WithoutDefualtConfigPath[C Validable]() Option[C] {
+	return WithConfigPath[C]("")
+}
+
 func WithSolver[C Validable](srcs ...solvers.ConfigSolver) Option[C] {
 	return func(c *Container[C]) error {
 		c.solvers = append(c.solvers, srcs...)
@@ -29,7 +33,7 @@ func WithSolver[C Validable](srcs ...solvers.ConfigSolver) Option[C] {
 	}
 }
 
-func WithProvider[C Validable](factories ...ProviderFactory[C]) Option[C] {
+func WithLoader[C Validable](factories ...LoaderBuilder[C]) Option[C] {
 	return func(c *Container[C]) error {
 		for _, factory := range factories {
 			provider, err := factory(c)
