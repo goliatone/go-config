@@ -1,0 +1,7 @@
+{
+    "name": "Config Test",
+    "env": "development",
+    "database": {
+        "dsn": "file:temp.db?fs=true"
+    }
+}
