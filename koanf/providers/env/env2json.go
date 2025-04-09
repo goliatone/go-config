@@ -2,6 +2,7 @@ package env
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 type Env struct {
 	prefix string
 	delim  string
-	cb     func(key string, value string) (string, interface{})
+	cb     func(key string, value string) (string, any)
 	out    string
 }
 
@@ -23,7 +24,7 @@ type Env struct {
 // APP_DATABASE__2__PASSWORD=password_3
 //
 // Provider returns an environment variables provider that returns
-// a nested map[string]interface{} of environment variable where the
+// a nested map[string]any of environment variable where the
 // nesting hierarchy of keys is defined by delim. For instance, the
 // delim "." will convert the key `parent.child.key: 1`
 // to `{parent: {child: {key: 1}}}`.
@@ -42,7 +43,7 @@ func Provider(prefix, delim string, cb func(s string) string) *Env {
 		out:    "{}",
 	}
 	if cb != nil {
-		e.cb = func(key string, value string) (string, interface{}) {
+		e.cb = func(key string, value string) (string, any) {
 			return cb(key), value
 		}
 	}
@@ -53,7 +54,7 @@ func Provider(prefix, delim string, cb func(s string) string) *Env {
 // takes a (key, value) with the variable name and value and allows you
 // to modify both. This is useful for cases where you may want to return
 // other types like a string slice instead of just a string.
-func ProviderWithValue(prefix, delim string, cb func(key string, value string) (string, interface{})) *Env {
+func ProviderWithValue(prefix, delim string, cb func(key string, value string) (string, any)) *Env {
 	return &Env{
 		prefix: prefix,
 		delim:  delim,
@@ -77,10 +78,11 @@ func (e *Env) ReadBytes() ([]byte, error) {
 
 	for _, k := range keys {
 		parts := strings.SplitN(k, "=", 2)
+		fmt.Printf("== var %s\n", k)
 
 		var (
 			key   string
-			value interface{}
+			value any
 		)
 
 		// If there's a transformation callback,
@@ -95,16 +97,16 @@ func (e *Env) ReadBytes() ([]byte, error) {
 			key = parts[0]
 			value = parts[1]
 		}
-
+		fmt.Printf("== key %s\n", key)
 		if err := e.set(key, value); err != nil {
 			return []byte{}, err
 		}
 	}
-
+	fmt.Println("==== done: " + e.out)
 	return []byte(e.out), nil
 }
 
-func (e *Env) set(key string, value interface{}) error {
+func (e *Env) set(key string, value any) error {
 	out, err := sjson.Set(e.out, strings.Replace(key, e.delim, ".", -1), value)
 	if err != nil {
 		return err
@@ -116,6 +118,6 @@ func (e *Env) set(key string, value interface{}) error {
 }
 
 // Read is not supported by the file provider.
-func (e *Env) Read() (map[string]interface{}, error) {
+func (e *Env) Read() (map[string]any, error) {
 	return nil, errors.New("envextended provider does not support this method")
 }

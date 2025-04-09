@@ -34,12 +34,11 @@ const (
 )
 
 var (
-	DefaultOrderDef      = 0
-	DefaultOrderEnv      = 10
-	DefaultOrderFile     = 20
-	DefaultOrderFlag     = 30
-	DefaultOrderStruct   = 40
-	DefaultOrderOptional = 50
+	DefaultOrderDef    = 0
+	DefaultOrderStruct = 10
+	DefaultOrderFile   = 20
+	DefaultOrderEnv    = 30
+	DefaultOrderFlag   = 40
 )
 
 var (
@@ -90,7 +89,9 @@ func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] 
 			Type:  LoaderTypeLocalFile,
 			Order: getOrder(DefaultOrderFile, orders...),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
-				if err := k.Load(kprovider, parser); err != nil {
+				c.logger.Debug("file provider: %s", filepath)
+				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
+				if err := k.Load(kprovider, parser, merger); err != nil {
 					return fmt.Errorf("failed to load config from file %q: %w", filepath, err)
 				}
 				return nil
@@ -114,7 +115,7 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 					return strings.Replace(strings.ToLower(
 						strings.TrimPrefix(s, prefix)), delim, ".", -1)
 				})
-
+				c.logger.Debug("env provider")
 				if err := k.Load(kprov, parser, merger); err != nil {
 					return fmt.Errorf("failed to load environment variables: %w", err)
 				}
@@ -136,7 +137,8 @@ func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuil
 			Type:  LoaderTypeFlag,
 			Order: getOrder(DefaultOrderFlag, order...),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
-				prv := posflag.Provider(flagset, defaultDelimiter, k)
+				c.logger.Debug("flags provider")
+				prv := posflag.Provider(flagset, DefaultDelimiter, k)
 				if err := k.Load(prv, nil); err != nil {
 					return fmt.Errorf("failed to load config from posix flags: %w", err)
 				}
@@ -162,6 +164,7 @@ func StructProvider[C Validable](v Validable, order ...int) LoaderBuilder[C] {
 			Type:  LoaderTypeStruct,
 			Order: getOrder(DefaultOrderStruct, order...),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
+				c.logger.Debug("struct provider")
 				if err := k.Load(kprv, nil); err != nil {
 					return fmt.Errorf("faild to load cofig from struct: %w", err)
 				}
@@ -211,7 +214,7 @@ func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFi
 		// Preserve the underlying provider's type.
 		p := Loader{
 			Type:  baseProvider.Type,
-			Order: baseProvider.Order,
+			Order: getOrder(DefaultOrderDef, baseProvider.Order),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
 				if err := baseProvider.Load(ctx, k); !errIgnore(err) {
 					return err
