@@ -38,7 +38,10 @@ func (c App) Validate() error {
 
 func main() {
 	app := &App{}
-	config, err := config.New(app)
+	config, err := config.New(app,
+		config.WithLoader(config.EnvProvider[*App]("APP_", "__")),
+		config.WithLoader(config.FileProvider[*App]("./config/app.json")),
+	)
 	if err != nil {
 		panic(err)
 	}
