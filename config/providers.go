@@ -34,12 +34,11 @@ const (
 )
 
 var (
-	DefaultOrderDef      = 0
-	DefaultOrderStruct   = 10
-	DefaultOrderFile     = 20
-	DefaultOrderEnv      = 30
-	DefaultOrderFlag     = 40
-	DefaultOrderOptional = 50
+	DefaultOrderDef    = 0
+	DefaultOrderStruct = 10
+	DefaultOrderFile   = 20
+	DefaultOrderEnv    = 30
+	DefaultOrderFlag   = 40
 )
 
 var (
@@ -215,7 +214,7 @@ func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFi
 		// Preserve the underlying provider's type.
 		p := Loader{
 			Type:  baseProvider.Type,
-			Order: baseProvider.Order,
+			Order: getOrder(DefaultOrderDef, baseProvider.Order),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
 				if err := baseProvider.Load(ctx, k); !errIgnore(err) {
 					return err
