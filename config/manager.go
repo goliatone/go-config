@@ -10,8 +10,10 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-const defaultDelimiter = "."
-const defaultConfigFilepath = "config/app.json"
+var (
+	DefaultDelimiter      = "."
+	DefaultConfigFilepath = "config/app.json"
+)
 
 type Validable interface {
 	Validate() error
@@ -30,13 +32,14 @@ type Container[C Validable] struct {
 }
 
 func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
+
 	mgr := &Container[C]{
 		mustValidate: true,
 		strictMerge:  true,
 		base:         c,
 		loadTimeout:  time.Second * 10,
-		delimiter:    defaultDelimiter,
-		configPath:   defaultConfigFilepath,
+		delimiter:    DefaultDelimiter,
+		configPath:   DefaultConfigFilepath,
 		solvers: []solvers.ConfigSolver{
 			solvers.NewVariablesSolver("${", "}"),
 			solvers.NewURISolver("@", "://"),
@@ -79,39 +82,39 @@ func (m *Container[C]) Validate() error {
 	if err := m.base.Validate(); err != nil {
 		return fmt.Errorf("failed to validate config: %w", err)
 	}
-
 	return nil
 }
 
-func (m *Container[C]) Load(ctxs ...context.Context) error {
-	basectx := context.Background()
+func (c *Container[C]) Load(ctxs ...context.Context) error {
+	bctx := context.Background()
 	if len(ctxs) > 1 {
-		basectx = ctxs[0]
+		bctx = ctxs[0]
 	}
 
-	ctx, cancel := context.WithTimeout(basectx, m.loadTimeout)
+	ctx, cancel := context.WithTimeout(bctx, c.loadTimeout)
 	defer cancel()
 
-	sort.Slice(m.providers, func(i, j int) bool {
-		return m.providers[i].Order < m.providers[j].Order
+	sort.Slice(c.providers, func(i, j int) bool {
+		return c.providers[i].Order < c.providers[j].Order
 	})
 
-	for _, source := range m.providers {
-		if err := source.Load(ctx, m.K); err != nil {
+	for _, source := range c.providers {
+		fmt.Printf("= loading source: %s\n", source.Type)
+		if err := source.Load(ctx, c.K); err != nil {
 			return fmt.Errorf("faield to load config from %s: %w", source.Type, err)
 		}
 	}
 
-	for _, solver := range m.solvers {
-		solver.Solve(m.K)
+	for _, solver := range c.solvers {
+		solver.Solve(c.K)
 	}
 
-	if err := m.K.Unmarshal("", m.base); err != nil {
+	if err := c.K.Unmarshal("", c.base); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	if m.mustValidate {
-		if err := m.Validate(); err != nil {
+	if c.mustValidate {
+		if err := c.Validate(); err != nil {
 			return err
 		}
 	}
