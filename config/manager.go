@@ -52,7 +52,7 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 	for i, opt := range opts {
 		err := opt(mgr)
 		if err != nil {
-			mgr.logger.Error("failed to apply option %d: %w", i, err)
+			mgr.logger.Error("failed to apply option", "index", i, err)
 			return nil, fmt.Errorf("failed to apply option %d: %w", i, err)
 		}
 	}
@@ -63,7 +63,7 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		f := OptionalProvider(FileProvider[C](mgr.configPath))
 		p, err := f(mgr)
 		if err != nil {
-			mgr.logger.Error("error creating default loader: %s", err)
+			mgr.logger.Error("error creating default loader", err)
 			return nil, fmt.Errorf("error creating default loader: %w", err)
 		}
 		mgr.providers = append(mgr.providers, p)
@@ -71,7 +71,7 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 
 	for _, src := range mgr.providers {
 		if err := src.Type.Valid(); err != nil {
-			mgr.logger.Error("invalid source type for provider %s: %s", src.Type, err)
+			mgr.logger.Error("invalid source type for provider", "src_type", src.Type, err)
 			return nil, fmt.Errorf("invalid source type for provider %s: %w", src.Type, err)
 		}
 	}
@@ -86,7 +86,7 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 
 func (c *Container[C]) Validate() error {
 	if err := c.base.Validate(); err != nil {
-		c.logger.Error("failed to validate config: %s", err)
+		c.logger.Error("failed to validate config", err)
 		return fmt.Errorf("failed to validate config: %w", err)
 	}
 	return nil
@@ -106,9 +106,9 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 	})
 
 	for _, source := range c.providers {
-		c.logger.Debug("= loading source: %s", source.Type)
+		c.logger.Debug("= loading source", "source_type", source.Type)
 		if err := source.Load(ctx, c.K); err != nil {
-			c.logger.Error("faield to load config from %s: %s", source.Type, err)
+			c.logger.Error("faield to load config from", "source_type", source.Type, err)
 			return fmt.Errorf("faield to load config from %s: %w", source.Type, err)
 		}
 	}
@@ -118,13 +118,13 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 	}
 
 	if err := c.K.Unmarshal("", c.base); err != nil {
-		c.logger.Error("failed to unmarshal config: %s", err)
+		c.logger.Error("failed to unmarshal config", err)
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	if c.mustValidate {
 		if err := c.Validate(); err != nil {
-			c.logger.Error("failed to validate: %s", err)
+			c.logger.Error("failed to validate", err)
 			return err
 		}
 	}
