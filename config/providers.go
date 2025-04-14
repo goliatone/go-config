@@ -89,7 +89,7 @@ func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] 
 			Type:  LoaderTypeLocalFile,
 			Order: getOrder(DefaultOrderFile, orders...),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
-				c.logger.Debug("file provider: %s", filepath)
+				c.logger.Debug("file provider", "filepath", filepath)
 				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
 				if err := k.Load(kprovider, parser, merger); err != nil {
 					return fmt.Errorf("failed to load config from file %q: %w", filepath, err)
@@ -115,6 +115,9 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 					return strings.Replace(strings.ToLower(
 						strings.TrimPrefix(s, prefix)), delim, ".", -1)
 				})
+
+				kprov.SetLogger(c.logger)
+
 				c.logger.Debug("env provider")
 				if err := k.Load(kprov, parser, merger); err != nil {
 					return fmt.Errorf("failed to load environment variables: %w", err)
