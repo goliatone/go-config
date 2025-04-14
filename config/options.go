@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/goliatone/go-config/koanf/solvers"
+	"github.com/goliatone/go-config/logger"
 )
 
 type Option[C Validable] func(c *Container[C]) error
@@ -42,6 +43,13 @@ func WithLoader[C Validable](factories ...LoaderBuilder[C]) Option[C] {
 			}
 			c.providers = append(c.providers, provider)
 		}
+		return nil
+	}
+}
+
+func WithLogger[C Validable](logger logger.Logger) Option[C] {
+	return func(c *Container[C]) error {
+		c.logger = logger
 		return nil
 	}
 }
