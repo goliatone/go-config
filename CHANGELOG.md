@@ -1,5 +1,21 @@
 # Changelog
 
+# [unreleased]
+
+## <!-- 16 -->➕ Add
+
+- Create logger ([a6942e2](https://github.com/goliatone/go-config/commit/a6942e2502f8f218d76a67b46b2685908ce9f688))  - (goliatone)
+- Update login output ([f7973fa](https://github.com/goliatone/go-config/commit/f7973fac518ea79d9887a1a238b4ce59a739ceeb))  - (goliatone)
+
+## <!-- 2 -->🚜 Refactor
+
+- Use unified logger ([55dcac0](https://github.com/goliatone/go-config/commit/55dcac0aca45537a3fab6fee5351094d3a37abfe))  - (goliatone)
+- Use unified logger ([e3a62fd](https://github.com/goliatone/go-config/commit/e3a62fd19e3ca9373ffcd60c6d873875c631be18))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.2.0 ([9ddfa2d](https://github.com/goliatone/go-config/commit/9ddfa2d095b66a2b7532471af41c1839c6b796c3))  - (goliatone)
+
 # [0.2.0](https://github.com/goliatone/go-config/compare/v0.1.0...v0.2.0) - (2025-04-09)
 
 ## <!-- 13 -->📦 Bumps
