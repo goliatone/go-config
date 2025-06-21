@@ -22,7 +22,7 @@ func WithConfigPath[C Validable](p string) Option[C] {
 	}
 }
 
-func WithoutDefualtConfigPath[C Validable]() Option[C] {
+func WithoutDefaultConfigPath[C Validable]() Option[C] {
 	return WithConfigPath[C]("")
 }
 
