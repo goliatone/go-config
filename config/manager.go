@@ -2,12 +2,12 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
 	"github.com/goliatone/go-config/koanf/solvers"
 	"github.com/goliatone/go-config/logger"
+	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/v2"
 )
 
@@ -53,7 +53,12 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		err := opt(mgr)
 		if err != nil {
 			mgr.logger.Error("failed to apply option", "index", i, err)
-			return nil, fmt.Errorf("failed to apply option %d: %w", i, err)
+			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to apply configuration option").
+				WithTextCode("CONFIG_OPTION_FAILED").
+				WithMetadata(map[string]any{
+					"option_index":  i,
+					"total_options": len(opts),
+				})
 		}
 	}
 
@@ -64,15 +69,24 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		p, err := f(mgr)
 		if err != nil {
 			mgr.logger.Error("error creating default loader", err)
-			return nil, fmt.Errorf("error creating default loader: %w", err)
+			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to create default file provider").
+				WithTextCode("DEFAULT_PROVIDER_FAILED").
+				WithMetadata(map[string]any{
+					"config_path": mgr.configPath,
+				})
 		}
 		mgr.providers = append(mgr.providers, p)
 	}
 
-	for _, src := range mgr.providers {
+	for i, src := range mgr.providers {
 		if err := src.Type.Valid(); err != nil {
 			mgr.logger.Error("invalid source type for provider", "src_type", src.Type, err)
-			return nil, fmt.Errorf("invalid source type for provider %s: %w", src.Type, err)
+			return nil, errors.Wrap(err, errors.CategoryValidation, "invalid provider source type").
+				WithTextCode("INVALID_PROVIDER_TYPE").
+				WithMetadata(map[string]any{
+					"source_type":    string(src.Type),
+					"provider_index": i,
+				})
 		}
 	}
 
@@ -87,7 +101,8 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 func (c *Container[C]) Validate() error {
 	if err := c.base.Validate(); err != nil {
 		c.logger.Error("failed to validate config", err)
-		return fmt.Errorf("failed to validate config: %w", err)
+		return errors.Wrap(err, errors.CategoryValidation, "configuration validation failed").
+			WithTextCode("CONFIG_VALIDATION_FAILED")
 	}
 	return nil
 }
@@ -105,11 +120,17 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 		return c.providers[i].Order < c.providers[j].Order
 	})
 
-	for _, source := range c.providers {
+	for i, source := range c.providers {
 		c.logger.Debug("= loading source", "source_type", source.Type)
 		if err := source.Load(ctx, c.K); err != nil {
-			c.logger.Error("faield to load config from", "source_type", source.Type, err)
-			return fmt.Errorf("faield to load config from %s: %w", source.Type, err)
+			c.logger.Error("failed to load config from", "source_type", source.Type, err)
+			return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from source").
+				WithTextCode("CONFIG_LOAD_FAILED").
+				WithMetadata(map[string]any{
+					"source_type":   string(source.Type),
+					"source_index":  i,
+					"total_sources": len(c.providers),
+				})
 		}
 	}
 
@@ -119,13 +140,18 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 
 	if err := c.K.Unmarshal("", c.base); err != nil {
 		c.logger.Error("failed to unmarshal config", err)
-		return fmt.Errorf("failed to unmarshal config: %w", err)
+		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
+			WithTextCode("CONFIG_UNMARSHAL_FAILED").
+			WithMetadata(map[string]any{
+				"delimiter":    c.delimiter,
+				"strict_merge": c.strictMerge,
+			})
 	}
 
 	if c.mustValidate {
 		if err := c.Validate(); err != nil {
 			c.logger.Error("failed to validate", err)
-			return err
+			return err // Already wrapped in Validate() method
 		}
 	}
 
