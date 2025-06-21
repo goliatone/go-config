@@ -179,11 +179,11 @@ func TestStructProvider(t *testing.T) {
 
 func TestOptionalProvider(t *testing.T) {
 	dummyErr := errors.New("dummy error")
-	dummyFactory := func(c *Container[testApp]) (Loader, error) {
-		return Loader{
-			Type:  LoaderTypeDefault,
-			Order: 1,
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+	dummyFactory := func(c *Container[testApp]) (Provider, error) {
+		return &Loader{
+			providerType: ProviderTypeDefault,
+			order:        1,
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				return dummyErr
 			},
 		}, nil
@@ -207,15 +207,15 @@ func TestOptionalProvider(t *testing.T) {
 
 func TestValidationError(t *testing.T) {
 	cfg := &invalidConfig{}
-	dummyProvider := Loader{
-		Type:  LoaderTypeDefault,
-		Order: 1,
-		Load: func(ctx context.Context, k *koanf.Koanf) error {
+	dummyProvider := &Loader{
+		providerType: ProviderTypeDefault,
+		order:        1,
+		load: func(ctx context.Context, k *koanf.Koanf) error {
 			return nil
 		},
 	}
 	opt := func(c *Container[*invalidConfig]) error {
-		c.providers = []Loader{dummyProvider}
+		c.providers = []Provider{dummyProvider}
 		return nil
 	}
 	container, err := New(cfg, opt)
