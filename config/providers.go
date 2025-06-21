@@ -2,11 +2,11 @@ package config
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	goerrors "errors"
 	"strings"
 
 	"github.com/goliatone/go-config/koanf/providers/env"
+	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/file"
@@ -55,7 +55,18 @@ func (p LoaderType) Valid() error {
 	case LoaderTypeDefault, LoaderTypeLocalFile, LoaderTypeEnv, LoaderTypeFlag, LoaderTypeStruct:
 		return nil
 	default:
-		return fmt.Errorf("invalid source type: %s", p)
+		return errors.New("invalid loader type", errors.CategoryValidation).
+			WithTextCode("INVALID_LOADER_TYPE").
+			WithMetadata(map[string]any{
+				"loader_type": string(p),
+				"valid_types": []string{
+					string(LoaderTypeDefault),
+					string(LoaderTypeLocalFile),
+					string(LoaderTypeEnv),
+					string(LoaderTypeFlag),
+					string(LoaderTypeStruct),
+				},
+			})
 	}
 }
 
@@ -68,7 +79,11 @@ func DefaultValues[C Validable](def map[string]any, order ...int) LoaderBuilder[
 			Order: getOrder(DefaultOrderDef, order...),
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
 				if err := k.Load(kprovider, nil); err != nil {
-					return fmt.Errorf("failed to load default values: %w", err)
+					return errors.Wrap(err, errors.CategoryOperation, "failed to load default values").
+						WithTextCode("DEFAULT_VALUES_LOAD_FAILED").
+						WithMetadata(map[string]any{
+							"values_count": len(def),
+						})
 				}
 				return nil
 			},
@@ -92,7 +107,12 @@ func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] 
 				c.logger.Debug("file provider", "filepath", filepath)
 				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
 				if err := k.Load(kprovider, parser, merger); err != nil {
-					return fmt.Errorf("failed to load config from file %q: %w", filepath, err)
+					return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from file").
+						WithTextCode("FILE_LOAD_FAILED").
+						WithMetadata(map[string]any{
+							"filepath":  filepath,
+							"file_type": string(filetype),
+						})
 				}
 				return nil
 			},
@@ -120,7 +140,12 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 
 				c.logger.Debug("env provider")
 				if err := k.Load(kprov, parser, merger); err != nil {
-					return fmt.Errorf("failed to load environment variables: %w", err)
+					return errors.Wrap(err, errors.CategoryOperation, "failed to load environment variables").
+						WithTextCode("ENV_LOAD_FAILED").
+						WithMetadata(map[string]any{
+							"prefix":    prefix,
+							"delimiter": delim,
+						})
 				}
 				return nil
 			},
@@ -133,7 +158,8 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuilder[C] {
 	return func(c *Container[C]) (Loader, error) {
 		if flagset == nil {
-			return Loader{}, fmt.Errorf("flagset cannot be nil")
+			return Loader{}, errors.New("flagset cannot be nil", errors.CategoryBadInput).
+				WithTextCode("NIL_FLAGSET")
 		}
 
 		prv := Loader{
@@ -143,7 +169,11 @@ func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuil
 				c.logger.Debug("flags provider")
 				prv := posflag.Provider(flagset, DefaultDelimiter, k)
 				if err := k.Load(prv, nil); err != nil {
-					return fmt.Errorf("failed to load config from posix flags: %w", err)
+					return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from posix flags").
+						WithTextCode("FLAGS_LOAD_FAILED").
+						WithMetadata(map[string]any{
+							"delimiter": DefaultDelimiter,
+						})
 				}
 				return nil
 			},
@@ -156,7 +186,8 @@ func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuil
 func StructProvider[C Validable](v Validable, order ...int) LoaderBuilder[C] {
 	if v == nil {
 		return func(c *Container[C]) (Loader, error) {
-			return Loader{}, fmt.Errorf("struct cannot be nil")
+			return Loader{}, errors.New("struct cannot be nil", errors.CategoryBadInput).
+				WithTextCode("NIL_STRUCT")
 		}
 	}
 
@@ -169,7 +200,11 @@ func StructProvider[C Validable](v Validable, order ...int) LoaderBuilder[C] {
 			Load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("struct provider")
 				if err := k.Load(kprv, nil); err != nil {
-					return fmt.Errorf("faild to load cofig from struct: %w", err)
+					return errors.Wrap(err,
+						errors.CategoryOperation,
+						"failed to load configuration from struct",
+					).
+						WithTextCode("STRUCT_LOAD_FAILED")
 				}
 				return nil
 			},
@@ -191,7 +226,7 @@ func DefaultErrorFilter(allowedErrors ...error) ErrorFilter {
 		}
 
 		for _, allowed := range allowedErrors {
-			if errors.Is(err, allowed) {
+			if goerrors.Is(err, allowed) {
 				return true
 			}
 		}
@@ -199,10 +234,10 @@ func DefaultErrorFilter(allowedErrors ...error) ErrorFilter {
 	}
 }
 
-// OptionalProvider wraps a provider so that some errors (as defined by errIgnore)
-// are ignored.
+// OptionalProvider wraps a provider so that some errors
+// as defined by errIgnore are ignored
 func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFilter) LoaderBuilder[C] {
-	// Pick the default error filter if none provided.
+	// pick the default error filter if none provided
 	errIgnore := DefaultErrorFilter()
 	if len(errIgnoreFuncs) > 0 {
 		errIgnore = errIgnoreFuncs[0]
@@ -214,7 +249,6 @@ func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFi
 			return Loader{}, err
 		}
 
-		// Preserve the underlying provider's type.
 		p := Loader{
 			Type:  baseProvider.Type,
 			Order: getOrder(DefaultOrderDef, baseProvider.Order),
