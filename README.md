@@ -12,19 +12,19 @@ go get github.com/goliatone/go-config
 
 **Note**: This project requires Go 1.18+ for generics support.
 
-## Manager
+## Configuration Container
 
-The manager container is a flexible configuration package for Go that loads configuration values from multiple sources (files, environment variables, command-line flags, and in-code structs). It supports merging, validation, and even variable substitution through configurable solvers.
+The configuration container is a flexible package for Go that loads configuration values from multiple sources (files, environment variables, command-line flags, and in-code structs). It supports merging, validation, and variable substitution through configurable solvers.
 
 ### Features
-- Multi-Source Loading: Load configuration from JSON, YAML, or TOML files, environment variables, command-line flags, or directly from Go structs.
-- Validation: Each configuration struct can implement a `Validate()` method to enforce required rules.
-- Flexible Merging: Loaders are applied in a defined order so that later sources override earlier values.
-- Optional Loaders: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
-- Solvers: Built-in support for variable substitution (e.g. env vars) and URI solving.
-- Simple API: A single Container ties everything together, making it easy to initialize and access your configuration.
+- **Multi-Source Loading**: Load configuration from JSON, YAML, or TOML files, environment variables, command-line flags, or directly from Go structs.
+- **Validation**: Each configuration struct can implement a `Validate()` method to enforce required rules.
+- **Flexible Merging**: Loaders are applied in a defined order so that later sources override earlier values.
+- **Optional Loaders**: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
+- **Variable Substitution**: Built-in support for variable substitution (e.g. env vars) and URI solving.
+- **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
-### Example
+### Basic Example
 
 ```go
 package main
@@ -33,60 +33,151 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/goliatone/go-config/config"
+	"github.com/goliatone/go-config"
 )
 
-type App struct {
-	Name     string `koanf:"name"`
-	Env      string `koanf:"env"`
-	Version  string `koanf:"version"`
+type AppConfig struct {
+	Name    string `koanf:"name"`
+	Env     string `koanf:"env"`
+	Version string `koanf:"version"`
 	Database struct {
 		DSN string `koanf:"dsn"`
 	} `koanf:"database"`
 	Server struct {
-		Env string `koanf:"env"`
+		Port int    `koanf:"port"`
+		Host string `koanf:"host"`
 	} `koanf:"server"`
-	config *config.Container[*App]
 }
 
-func (c App) Validate() error {
-	if c.Env == "" || c.Name == "" || c.Version == "" {
+func (c AppConfig) Validate() error {
+	if c.Name == "" || c.Env == "" || c.Version == "" {
 		return fmt.Errorf("missing required app config values")
 	}
-
 	if c.Database.DSN == "" {
-		return fmt.Errorf("missing required database config values")
+		return fmt.Errorf("missing required database DSN")
 	}
-
-	if c.Server.Env == "" {
-		return fmt.Errorf("missing required server config values")
-	}
-
 	return nil
 }
 
 func main() {
-	app := &App{}
-	config, err := config.New(app)
+	cfg := &AppConfig{}
+
+	// Create container with default file provider (config/app.json)
+	container, err := config.New(cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	ctx := context.Background()
-
-	if err := config.Load(ctx); err != nil {
+	// Load configuration
+	if err := container.Load(context.Background()); err != nil {
 		panic(err)
 	}
 
-	app.config = config
-
-	fmt.Println("====== APP ======")
-	fmt.Println(app.Name)
-	fmt.Println(app.Env)
-	fmt.Println(app.Database.DSN)
+	fmt.Printf("App: %s v%s\n", cfg.Name, cfg.Version)
+	fmt.Printf("Database: %s\n", cfg.Database.DSN)
 }
 ```
 
+### Advanced Example with Multiple Sources
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/goliatone/go-config"
+	"github.com/spf13/pflag"
+)
+
+type AppConfig struct {
+	Name string `koanf:"name"`
+	Port int    `koanf:"port"`
+	Debug bool  `koanf:"debug"`
+}
+
+func (c AppConfig) Validate() error {
+	if c.Name == "" {
+		return fmt.Errorf("app name is required")
+	}
+	return nil
+}
+
+func main() {
+	cfg := &AppConfig{}
+
+	// Set up command line flags
+	flags := pflag.NewFlagSet("config", pflag.ContinueOnError)
+	flags.String("name", "", "Application name")
+	flags.Int("port", 8080, "Server port")
+	flags.Bool("debug", false, "Enable debug mode")
+	flags.Parse(os.Args[1:])
+
+	// create container with multiple providers
+	container, err := config.New(cfg,
+		config.WithConfigPath("configs/app.yaml"),
+		config.WithLoader(
+			config.DefaultValues(map[string]any{
+				"name":  "MyApp",
+				"port":  8080,
+				"debug": false,
+			}),
+			config.FileProvider[*AppConfig]("configs/app.yaml"),
+			config.EnvProvider[*AppConfig]("APP_", "__"),
+			config.FlagsProvider[*AppConfig](flags),
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := container.Load(context.Background()); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Final config: %+v\n", cfg)
+}
+```
+
+### Configuration Options
+
+```go
+// Disable validation
+config.WithValidation[*AppConfig](false)
+
+// Custom config file path
+config.WithConfigPath[*AppConfig]("custom/path.json")
+
+// Disable default config file loading
+config.WithoutDefualtConfigPath[*AppConfig]()
+
+// Add custom logger
+config.WithLogger[*AppConfig](myLogger)
+
+// Add variable solvers for substitution
+config.WithSolver[*AppConfig](
+	solvers.NewVariablesSolver("${", "}"),
+	solvers.NewURISolver("@", "://"),
+)
+```
+
+### Provider Order
+
+Providers are loaded in order of their `Order` field, with higher numbers overriding lower numbers:
+
+- **Default values**: 0
+- **Struct provider**: 10
+- **File provider**: 20
+- **Environment provider**: 30
+- **Flags provider**: 40
+
+You can customize the order when creating providers:
+
+```go
+config.FileProvider[*AppConfig]("config.json", 15) // Custom order
+```
 
 ## Solvers
 
@@ -188,7 +279,7 @@ Will replace the reference with the contents of the **version.txt** file:
 You can provide a custom `filesystem` implementation for the URI file solver:
 
 ```go
-CopycustomFS := os.DirFS("./configs")
+customFS := os.DirFS("./configs")
 uriSolver := solvers.NewURISolverWithFS("@", "://", customFS)
 ```
 

@@ -2,11 +2,11 @@ package config
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"testing"
 
+	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/v2"
 	"github.com/spf13/pflag"
 )
@@ -226,8 +226,8 @@ func TestValidationError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected validation error, got nil")
 	}
-	expected := "failed to validate config: invalid config"
-	if err.Error() != expected {
-		t.Errorf("Expected error %q, got %q", expected, err.Error())
+
+	if !errors.IsValidation(err) {
+		t.Errorf("Expected validation error, got %T: %v", err, err)
 	}
 }
