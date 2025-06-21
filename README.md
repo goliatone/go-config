@@ -119,7 +119,7 @@ func main() {
 	container, err := config.New(cfg,
 		config.WithConfigPath("configs/app.yaml"),
 		config.WithLoader(
-			config.DefaultValues(map[string]any{
+			config.DefaultValuesProvider(map[string]any{
 				"name":  "MyApp",
 				"port":  8080,
 				"debug": false,
@@ -151,7 +151,7 @@ config.WithValidation[*AppConfig](false)
 config.WithConfigPath[*AppConfig]("custom/path.json")
 
 // Disable default config file loading
-config.WithoutDefualtConfigPath[*AppConfig]()
+config.WithoutDefaultConfigPath[*AppConfig]()
 
 // Add custom logger
 config.WithLogger[*AppConfig](myLogger)
