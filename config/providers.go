@@ -16,43 +16,72 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type LoaderBuilder[C Validable] func(*Container[C]) (Loader, error)
+// TODO: rename to ProviderBuilder
+type LoaderBuilder[C Validable] func(*Container[C]) (Provider, error)
 
-type LoaderType string
+type ProviderType string
+
+type Provider interface {
+	Type() ProviderType
+	Priority() int
+	Load(context.Context, *koanf.Koanf) error
+}
+
 type Loader struct {
-	Order int
-	Type  LoaderType
-	Load  func(context.Context, *koanf.Koanf) error
+	order        int
+	providerType ProviderType
+	load         func(context.Context, *koanf.Koanf) error
+}
+
+func (l *Loader) Priority() int {
+	return l.order
+}
+
+func (l *Loader) Type() ProviderType {
+	return l.providerType
+}
+
+func (l *Loader) Load(ctx context.Context, k *koanf.Koanf) error {
+	return l.load(ctx, k)
 }
 
 const (
-	LoaderTypeDefault   LoaderType = "default"
-	LoaderTypeLocalFile LoaderType = "file"
-	LoaderTypeEnv       LoaderType = "env"
-	LoaderTypeFlag      LoaderType = "pflag"
-	LoaderTypeStruct    LoaderType = "struct"
+	ProviderTypeDefault   ProviderType = "default"
+	ProviderTypeLocalFile ProviderType = "file"
+	ProviderTypeEnv       ProviderType = "env"
+	ProviderTypeFlag      ProviderType = "pflag"
+	ProviderTypeStruct    ProviderType = "struct"
+)
+
+type Priority int
+
+// container.WithFileProvider("config.json", PriorityConfig.WithOffset(-10)) // 190
+// container.WithFileProvider("local.json", PriorityConfig.WithOffset(10))   // 210
+// container.WithStructProvider(defaults, PriorityStruct.WithOffset(5))      // 105
+func (p Priority) WithOffset(offset int) Priority {
+	return Priority(int(p) + offset)
+}
+
+var (
+	PriorityDefaults Priority = 0
+	PriorityStruct   Priority = 10
+	PriorityConfig   Priority = 20
+	PriorityEnv      Priority = 30
+	PriorityFlags    Priority = 40
 )
 
 var (
-	DefaultOrderDef    = 0
-	DefaultOrderStruct = 10
-	DefaultOrderFile   = 20
-	DefaultOrderEnv    = 30
-	DefaultOrderFlag   = 40
+	DefaultEnvPrefix    = "APP_"
+	DefaultEnvDelimiter = "__" // so we can have composed_words
 )
 
-var (
-	DefaultEnvPrefix = "APP_"
-	DefaultEnvDelim  = "__"
-)
-
-func (s LoaderType) String() string {
+func (s ProviderType) String() string {
 	return string(s)
 }
 
-func (p LoaderType) Valid() error {
+func (p ProviderType) Valid() error {
 	switch p {
-	case LoaderTypeDefault, LoaderTypeLocalFile, LoaderTypeEnv, LoaderTypeFlag, LoaderTypeStruct:
+	case ProviderTypeDefault, ProviderTypeLocalFile, ProviderTypeEnv, ProviderTypeFlag, ProviderTypeStruct:
 		return nil
 	default:
 		return errors.New("invalid loader type", errors.CategoryValidation).
@@ -60,24 +89,24 @@ func (p LoaderType) Valid() error {
 			WithMetadata(map[string]any{
 				"loader_type": string(p),
 				"valid_types": []string{
-					string(LoaderTypeDefault),
-					string(LoaderTypeLocalFile),
-					string(LoaderTypeEnv),
-					string(LoaderTypeFlag),
-					string(LoaderTypeStruct),
+					string(ProviderTypeDefault),
+					string(ProviderTypeLocalFile),
+					string(ProviderTypeEnv),
+					string(ProviderTypeFlag),
+					string(ProviderTypeStruct),
 				},
 			})
 	}
 }
 
-func DefaultValues[C Validable](def map[string]any, order ...int) LoaderBuilder[C] {
-	return func(c *Container[C]) (Loader, error) {
+func DefaultValuesProvider[C Validable](def map[string]any, order ...int) LoaderBuilder[C] {
+	return func(c *Container[C]) (Provider, error) {
 		kprovider := confmap.Provider(def, ".")
 
-		prv := Loader{
-			Type:  LoaderTypeDefault,
-			Order: getOrder(DefaultOrderDef, order...),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+		prv := &Loader{
+			providerType: ProviderTypeDefault,
+			order:        getOrder(PriorityDefaults, order...),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				if err := k.Load(kprovider, nil); err != nil {
 					return errors.Wrap(err, errors.CategoryOperation, "failed to load default values").
 						WithTextCode("DEFAULT_VALUES_LOAD_FAILED").
@@ -96,14 +125,14 @@ func DefaultValues[C Validable](def map[string]any, order ...int) LoaderBuilder[
 func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] {
 	filetype := inferConfigFiletype(filepath)
 
-	return func(c *Container[C]) (Loader, error) {
+	return func(c *Container[C]) (Provider, error) {
 		parser := filetype.Parser()
 		kprovider := file.Provider(filepath)
 
-		p := Loader{
-			Type:  LoaderTypeLocalFile,
-			Order: getOrder(DefaultOrderFile, orders...),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+		p := &Loader{
+			providerType: ProviderTypeLocalFile,
+			order:        getOrder(PriorityConfig, orders...),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("file provider", "filepath", filepath)
 				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
 				if err := k.Load(kprovider, parser, merger); err != nil {
@@ -124,11 +153,11 @@ func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] 
 // prefix string, delim string
 // "APP_", "__"
 func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[C] {
-	return func(c *Container[C]) (Loader, error) {
-		prv := Loader{
-			Type:  LoaderTypeEnv,
-			Order: getOrder(DefaultOrderEnv, order...),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+	return func(c *Container[C]) (Provider, error) {
+		prv := &Loader{
+			providerType: ProviderTypeEnv,
+			order:        getOrder(PriorityEnv, order...),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				parser := json.Parser()
 				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
 				kprov := env.Provider(prefix, ".", func(s string) string {
@@ -156,16 +185,16 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 }
 
 func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuilder[C] {
-	return func(c *Container[C]) (Loader, error) {
+	return func(c *Container[C]) (Provider, error) {
 		if flagset == nil {
-			return Loader{}, errors.New("flagset cannot be nil", errors.CategoryBadInput).
+			return &Loader{}, errors.New("flagset cannot be nil", errors.CategoryBadInput).
 				WithTextCode("NIL_FLAGSET")
 		}
 
-		prv := Loader{
-			Type:  LoaderTypeFlag,
-			Order: getOrder(DefaultOrderFlag, order...),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+		prv := &Loader{
+			providerType: ProviderTypeFlag,
+			order:        getOrder(PriorityFlags, order...),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("flags provider")
 				prv := posflag.Provider(flagset, DefaultDelimiter, k)
 				if err := k.Load(prv, nil); err != nil {
@@ -185,19 +214,19 @@ func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuil
 
 func StructProvider[C Validable](v Validable, order ...int) LoaderBuilder[C] {
 	if v == nil {
-		return func(c *Container[C]) (Loader, error) {
-			return Loader{}, errors.New("struct cannot be nil", errors.CategoryBadInput).
+		return func(c *Container[C]) (Provider, error) {
+			return &Loader{}, errors.New("struct cannot be nil", errors.CategoryBadInput).
 				WithTextCode("NIL_STRUCT")
 		}
 	}
 
-	return func(c *Container[C]) (Loader, error) {
+	return func(c *Container[C]) (Provider, error) {
 		kprv := structs.Provider(v, "koanf")
 
-		prv := Loader{
-			Type:  LoaderTypeStruct,
-			Order: getOrder(DefaultOrderStruct, order...),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+		prv := &Loader{
+			providerType: ProviderTypeStruct,
+			order:        getOrder(PriorityStruct, order...),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("struct provider")
 				if err := k.Load(kprv, nil); err != nil {
 					return errors.Wrap(err,
@@ -243,16 +272,16 @@ func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFi
 		errIgnore = errIgnoreFuncs[0]
 	}
 
-	return func(c *Container[C]) (Loader, error) {
+	return func(c *Container[C]) (Provider, error) {
 		baseProvider, err := f(c)
 		if err != nil {
-			return Loader{}, err
+			return &Loader{}, err
 		}
 
-		p := Loader{
-			Type:  baseProvider.Type,
-			Order: getOrder(DefaultOrderDef, baseProvider.Order),
-			Load: func(ctx context.Context, k *koanf.Koanf) error {
+		p := &Loader{
+			providerType: baseProvider.Type(),
+			order:        getOrder(PriorityDefaults, baseProvider.Priority()),
+			load: func(ctx context.Context, k *koanf.Koanf) error {
 				if err := baseProvider.Load(ctx, k); !errIgnore(err) {
 					return err
 				}
@@ -263,9 +292,9 @@ func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFi
 	}
 }
 
-func getOrder(defaultOrder int, orders ...int) int {
+func getOrder(defaultOrder Priority, orders ...int) int {
 	if len(orders) > 0 {
 		return orders[0]
 	}
-	return defaultOrder
+	return int(defaultOrder)
 }
