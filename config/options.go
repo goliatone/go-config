@@ -1,10 +1,9 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/goliatone/go-config/koanf/solvers"
 	"github.com/goliatone/go-config/logger"
+	"github.com/goliatone/go-errors"
 )
 
 type Option[C Validable] func(c *Container[C]) error
@@ -36,10 +35,15 @@ func WithSolver[C Validable](srcs ...solvers.ConfigSolver) Option[C] {
 
 func WithLoader[C Validable](factories ...LoaderBuilder[C]) Option[C] {
 	return func(c *Container[C]) error {
-		for _, factory := range factories {
+		for i, factory := range factories {
 			provider, err := factory(c)
 			if err != nil {
-				return fmt.Errorf("failed to create provider: %w", err)
+				return errors.Wrap(err, errors.CategoryOperation, "failed to create loader provider").
+					WithTextCode("PROVIDER_CREATION_FAILED").
+					WithMetadata(map[string]any{
+						"factory_index":   i,
+						"total_factories": len(factories),
+					})
 			}
 			c.providers = append(c.providers, provider)
 		}
