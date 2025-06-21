@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 var (
 	DefaultDelimiter      = "."
 	DefaultConfigFilepath = "config/app.json"
+	DefaultLoadTimeout    = 30 * time.Second
 )
 
 type Validable interface {
@@ -23,7 +25,7 @@ type Validable interface {
 type Container[C Validable] struct {
 	K            *koanf.Koanf
 	base         C
-	providers    []Loader
+	providers    []Provider
 	mustValidate bool
 	strictMerge  bool
 	loadTimeout  time.Duration
@@ -39,8 +41,8 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		mustValidate: true,
 		strictMerge:  true,
 		base:         c,
-		loadTimeout:  time.Second * 10,
 		delimiter:    DefaultDelimiter,
+		loadTimeout:  DefaultLoadTimeout,
 		configPath:   DefaultConfigFilepath,
 		logger:       logger.NewDefaultLogger("config"),
 		solvers: []solvers.ConfigSolver{
@@ -52,7 +54,6 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 	for i, opt := range opts {
 		err := opt(mgr)
 		if err != nil {
-			mgr.logger.Error("failed to apply option", "index", i, err)
 			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to apply configuration option").
 				WithTextCode("CONFIG_OPTION_FAILED").
 				WithMetadata(map[string]any{
@@ -68,7 +69,6 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		f := OptionalProvider(FileProvider[C](mgr.configPath))
 		p, err := f(mgr)
 		if err != nil {
-			mgr.logger.Error("error creating default loader", err)
 			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to create default file provider").
 				WithTextCode("DEFAULT_PROVIDER_FAILED").
 				WithMetadata(map[string]any{
@@ -79,12 +79,11 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 	}
 
 	for i, src := range mgr.providers {
-		if err := src.Type.Valid(); err != nil {
-			mgr.logger.Error("invalid source type for provider", "src_type", src.Type, err)
+		if err := src.Type().Valid(); err != nil {
 			return nil, errors.Wrap(err, errors.CategoryValidation, "invalid provider source type").
 				WithTextCode("INVALID_PROVIDER_TYPE").
 				WithMetadata(map[string]any{
-					"source_type":    string(src.Type),
+					"source_type":    string(src.Type()),
 					"provider_index": i,
 				})
 		}
@@ -100,34 +99,38 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 
 func (c *Container[C]) Validate() error {
 	if err := c.base.Validate(); err != nil {
-		c.logger.Error("failed to validate config", err)
 		return errors.Wrap(err, errors.CategoryValidation, "configuration validation failed").
 			WithTextCode("CONFIG_VALIDATION_FAILED")
 	}
 	return nil
 }
 
-func (c *Container[C]) Load(ctxs ...context.Context) error {
-	bctx := context.Background()
-	if len(ctxs) > 1 {
-		bctx = ctxs[0]
+func (c *Container[C]) MustValidate() *Container[C] {
+	if err := c.Validate(); err != nil {
+		panic(err)
 	}
+	return c
+}
 
-	ctx, cancel := context.WithTimeout(bctx, c.loadTimeout)
+func (c *Container[C]) LoadWithDefaults() error {
+	return c.Load(context.Background())
+}
+
+func (c *Container[C]) Load(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
 
 	sort.Slice(c.providers, func(i, j int) bool {
-		return c.providers[i].Order < c.providers[j].Order
+		return c.providers[i].Priority() < c.providers[j].Priority()
 	})
 
 	for i, source := range c.providers {
-		c.logger.Debug("= loading source", "source_type", source.Type)
+		c.logger.Debug("= loading source", "source_type", source.Type())
 		if err := source.Load(ctx, c.K); err != nil {
-			c.logger.Error("failed to load config from", "source_type", source.Type, err)
 			return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from source").
 				WithTextCode("CONFIG_LOAD_FAILED").
 				WithMetadata(map[string]any{
-					"source_type":   string(source.Type),
+					"source_type":   string(source.Type()),
 					"source_index":  i,
 					"total_sources": len(c.providers),
 				})
@@ -139,7 +142,6 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 	}
 
 	if err := c.K.Unmarshal("", c.base); err != nil {
-		c.logger.Error("failed to unmarshal config", err)
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
 			WithMetadata(map[string]any{
@@ -150,12 +152,17 @@ func (c *Container[C]) Load(ctxs ...context.Context) error {
 
 	if c.mustValidate {
 		if err := c.Validate(); err != nil {
-			c.logger.Error("failed to validate", err)
-			return err // Already wrapped in Validate() method
+			return err // already wrapped in Validate() method
 		}
 	}
 
 	return nil
+}
+
+func (c *Container[C]) MustLoad(ctx context.Context) {
+	if err := c.Load(ctx); err != nil {
+		panic(fmt.Sprintf("Failed to load configuration: %v", err))
+	}
 }
 
 func (c *Container[C]) Raw() C {
