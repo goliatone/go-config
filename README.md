@@ -63,10 +63,7 @@ func main() {
 	cfg := &AppConfig{}
 
 	// Create container with default file provider (config/app.json)
-	container, err := config.New(cfg)
-	if err != nil {
-		panic(err)
-	}
+	container config.New(cfg)
 
 	// Load configuration
 	if err := container.Load(context.Background()); err != nil {
@@ -116,9 +113,9 @@ func main() {
 	flags.Parse(os.Args[1:])
 
 	// create container with multiple providers
-	container, err := config.New(cfg,
-		config.WithConfigPath("configs/app.yaml"),
-		config.WithLoader(
+	container := config.New(cfg).
+		WithConfigPath("configs/app.yaml").
+		WithProvider(
 			config.DefaultValuesProvider(map[string]any{
 				"name":  "MyApp",
 				"port":  8080,
@@ -127,8 +124,7 @@ func main() {
 			config.FileProvider[*AppConfig]("configs/app.yaml"),
 			config.EnvProvider[*AppConfig]("APP_", "__"),
 			config.FlagsProvider[*AppConfig](flags),
-		),
-	)
+		)
 	if err != nil {
 		panic(err)
 	}
@@ -145,19 +141,19 @@ func main() {
 
 ```go
 // Disable validation
-config.WithValidation[*AppConfig](false)
+container.WithValidation[*AppConfig](false)
 
 // Custom config file path
-config.WithConfigPath[*AppConfig]("custom/path.json")
+container.WithConfigPath[*AppConfig]("custom/path.json")
 
 // Disable default config file loading
-config.WithoutDefaultConfigPath[*AppConfig]()
+container.WithoutDefaultConfigPath[*AppConfig]()
 
 // Add custom logger
-config.WithLogger[*AppConfig](myLogger)
+container.WithLogger[*AppConfig](myLogger)
 
 // Add variable solvers for substitution
-config.WithSolver[*AppConfig](
+container.WithSolver[*AppConfig](
 	solvers.NewVariablesSolver("${", "}"),
 	solvers.NewURISolver("@", "://"),
 )
