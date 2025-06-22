@@ -2,10 +2,10 @@ package env
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
+	"github.com/goliatone/go-config/logger"
 	"github.com/tidwall/sjson"
 )
 
@@ -15,6 +15,7 @@ type Env struct {
 	delim  string
 	cb     func(key string, value string) (string, any)
 	out    string
+	logger logger.Logger
 }
 
 // Provider works like built in env provider but with support for
@@ -41,6 +42,7 @@ func Provider(prefix, delim string, cb func(s string) string) *Env {
 		prefix: prefix,
 		delim:  delim,
 		out:    "{}",
+		logger: &logger.DefaultLogger{},
 	}
 	if cb != nil {
 		e.cb = func(key string, value string) (string, any) {
@@ -59,7 +61,12 @@ func ProviderWithValue(prefix, delim string, cb func(key string, value string) (
 		prefix: prefix,
 		delim:  delim,
 		cb:     cb,
+		logger: &logger.DefaultLogger{},
 	}
+}
+
+func (e *Env) SetLogger(logger logger.Logger) {
+	e.logger = logger
 }
 
 // ReadBytes reads the contents of a file on disk and returns the bytes.
@@ -78,7 +85,7 @@ func (e *Env) ReadBytes() ([]byte, error) {
 
 	for _, k := range keys {
 		parts := strings.SplitN(k, "=", 2)
-		fmt.Printf("== var %s\n", k)
+		e.logger.Debug("=", "var", k)
 
 		var (
 			key   string
@@ -97,12 +104,14 @@ func (e *Env) ReadBytes() ([]byte, error) {
 			key = parts[0]
 			value = parts[1]
 		}
-		fmt.Printf("== key %s\n", key)
+		e.logger.Debug("=", "key", key)
 		if err := e.set(key, value); err != nil {
 			return []byte{}, err
 		}
 	}
-	fmt.Println("==== done: " + e.out)
+
+	e.logger.Debug("==== done: " + e.out)
+
 	return []byte(e.out), nil
 }
 

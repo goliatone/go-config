@@ -2,12 +2,45 @@
 
 # [unreleased]
 
+## <!-- 16 -->➕ Add
+
+- Create logger ([a6942e2](https://github.com/goliatone/go-config/commit/a6942e2502f8f218d76a67b46b2685908ce9f688))  - (goliatone)
+- Update login output ([f7973fa](https://github.com/goliatone/go-config/commit/f7973fac518ea79d9887a1a238b4ce59a739ceeb))  - (goliatone)
+
+## <!-- 2 -->🚜 Refactor
+
+- Use unified logger ([55dcac0](https://github.com/goliatone/go-config/commit/55dcac0aca45537a3fab6fee5351094d3a37abfe))  - (goliatone)
+- Use unified logger ([e3a62fd](https://github.com/goliatone/go-config/commit/e3a62fd19e3ca9373ffcd60c6d873875c631be18))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.2.0 ([9ddfa2d](https://github.com/goliatone/go-config/commit/9ddfa2d095b66a2b7532471af41c1839c6b796c3))  - (goliatone)
+
+# [0.2.0](https://github.com/goliatone/go-config/compare/v0.1.0...v0.2.0) - (2025-04-09)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.2.0 ([4228805](https://github.com/goliatone/go-config/commit/422880566189598b8e8eb8a547d386de23ab77ff))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- File loader to example ([9a6fbfa](https://github.com/goliatone/go-config/commit/9a6fbfa33922cb8636c3a6854293484966bfe567))  - (goliatone)
+- Sort order fix; ([525f85e](https://github.com/goliatone/go-config/commit/525f85eec5126b6a7a68026628a42559990674f2))  - (goliatone)
+- Sort order fix; ([530c228](https://github.com/goliatone/go-config/commit/530c2283209f66fe1566be6467966b850daf02f1))  - (goliatone)
+- Logger. fix: sort order ([386514d](https://github.com/goliatone/go-config/commit/386514d401ae8faa931a1e828919ac7de7009a78))  - (goliatone)
+- Default logger ([4445b7f](https://github.com/goliatone/go-config/commit/4445b7febad5123001d0d08019371a4a00bdb607))  - (goliatone)
+
+## <!-- 2 -->🚜 Refactor
+
+- Make default values vars ([0ca9183](https://github.com/goliatone/go-config/commit/0ca91830bd2d0aeedb10ddef0b2679b0a19e5d1c))  - (goliatone)
+
 ## <!-- 3 -->📚 Documentation
 
 - Update changelog for v0.1.0 ([8f7f2ab](https://github.com/goliatone/go-config/commit/8f7f2abb6889a312b19e32c0f048301c5733ee5d))  - (goliatone)
 
 ## <!-- 7 -->⚙️ Miscellaneous Tasks
 
+- Update changelog ([79a8751](https://github.com/goliatone/go-config/commit/79a8751e1e9a9d9aadd45db505ec52d93a2fae39))  - (goliatone)
 - Add cliff.toml to generate CHANGELOG ([5b552a6](https://github.com/goliatone/go-config/commit/5b552a6a526932111321221db966402587c76240))  - (goliatone)
 
 # [0.1.0](https://github.com/goliatone/go-config/compare/v0.0.1...v0.1.0) - (2025-02-07)

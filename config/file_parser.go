@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/parsers/yaml"
@@ -21,7 +22,16 @@ func (c ConfigFileType) Valid() error {
 	case FileTypeJSON, FileTypeYAML, FileTypeTOML:
 		return nil
 	default:
-		return fmt.Errorf("invalid config file type: %s", c)
+		return errors.New("invalid config file type", errors.CategoryValidation).
+			WithTextCode("INVALID_FILE_TYPE").
+			WithMetadata(map[string]any{
+				"file_type": string(c),
+				"valid_types": []string{
+					string(FileTypeJSON),
+					string(FileTypeYAML),
+					string(FileTypeTOML),
+				},
+			})
 	}
 }
 
