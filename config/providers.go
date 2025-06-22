@@ -17,7 +17,7 @@ import (
 )
 
 // TODO: rename to ProviderBuilder
-type LoaderBuilder[C Validable] func(*Container[C]) (Provider, error)
+type ProviderBuilder[C Validable] func(*Container[C]) (Provider, error)
 
 type ProviderType string
 
@@ -104,7 +104,7 @@ func (p ProviderType) validate() error {
 	}
 }
 
-func DefaultValuesProvider[C Validable](def map[string]any, order ...int) LoaderBuilder[C] {
+func DefaultValuesProvider[C Validable](def map[string]any, order ...int) ProviderBuilder[C] {
 	return func(c *Container[C]) (Provider, error) {
 		kprovider := confmap.Provider(def, ".")
 
@@ -127,7 +127,7 @@ func DefaultValuesProvider[C Validable](def map[string]any, order ...int) Loader
 	}
 }
 
-func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] {
+func FileProvider[C Validable](filepath string, orders ...int) ProviderBuilder[C] {
 	filetype := inferConfigFiletype(filepath)
 
 	return func(c *Container[C]) (Provider, error) {
@@ -157,7 +157,7 @@ func FileProvider[C Validable](filepath string, orders ...int) LoaderBuilder[C] 
 
 // prefix string, delim string
 // "APP_", "__"
-func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[C] {
+func EnvProvider[C Validable](prefix, delim string, order ...int) ProviderBuilder[C] {
 	return func(c *Container[C]) (Provider, error) {
 		prv := &Loader{
 			providerType: ProviderTypeEnv,
@@ -189,7 +189,7 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) LoaderBuilder[
 	}
 }
 
-func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuilder[C] {
+func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) ProviderBuilder[C] {
 	return func(c *Container[C]) (Provider, error) {
 		if flagset == nil {
 			return &Loader{}, errors.New("flagset cannot be nil", errors.CategoryBadInput).
@@ -217,7 +217,7 @@ func FlagsProvider[C Validable](flagset *pflag.FlagSet, order ...int) LoaderBuil
 	}
 }
 
-func StructProvider[C Validable](v Validable, order ...int) LoaderBuilder[C] {
+func StructProvider[C Validable](v Validable, order ...int) ProviderBuilder[C] {
 	if v == nil {
 		return func(c *Container[C]) (Provider, error) {
 			return &Loader{}, errors.New("struct cannot be nil", errors.CategoryBadInput).
@@ -270,7 +270,7 @@ func DefaultErrorFilter(allowedErrors ...error) ErrorFilter {
 
 // OptionalProvider wraps a provider so that some errors
 // as defined by errIgnore are ignored
-func OptionalProvider[C Validable](f LoaderBuilder[C], errIgnoreFuncs ...ErrorFilter) LoaderBuilder[C] {
+func OptionalProvider[C Validable](f ProviderBuilder[C], errIgnoreFuncs ...ErrorFilter) ProviderBuilder[C] {
 	// pick the default error filter if none provided
 	errIgnore := DefaultErrorFilter()
 	if len(errIgnoreFuncs) > 0 {
