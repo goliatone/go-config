@@ -42,6 +42,11 @@ func (c *Container[C]) WithValidation(v bool) *Container[C] {
 	return c
 }
 
+func (c *Container[C]) WithStrictMerge() *Container[C] {
+	c.strictMerge = true
+	return c
+}
+
 func (c *Container[C]) WithTimeout(timeout time.Duration) *Container[C] {
 	c.loadTimeout = timeout
 	return c
