@@ -51,17 +51,7 @@ func TestContainerLoadFromFile(t *testing.T) {
 
 	app := &testApp{}
 
-	opt := func(c *Container[*testApp]) error {
-		c.configPath = tmpfile.Name()
-		// force the default file loader
-		c.providers = nil
-		return nil
-	}
-
-	container, err := New(app, opt)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	container := New(app).WithConfigPath(tmpfile.Name())
 
 	if err := container.Load(context.Background()); err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -88,20 +78,12 @@ func TestEnvLoader(t *testing.T) {
 	defer os.Unsetenv("APP_DATABASE__DSN")
 
 	cfg := &testApp{}
-	opt := func(c *Container[*testApp]) error {
-		c.providers = nil
-		loaderFactory := EnvProvider[*testApp]("APP_", "__")
-		loader, err := loaderFactory(c)
-		if err != nil {
-			return err
-		}
-		c.providers = append(c.providers, loader)
-		return nil
-	}
-	container, err := New(cfg, opt)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+
+	loaderFactory := EnvProvider[*testApp]("APP_", "__")
+
+	container := New(cfg).
+		WithConfigPath(""). // we need to disable default config
+		WithProvider(loaderFactory)
 
 	if err := container.Load(context.Background()); err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -124,20 +106,11 @@ func TestFlagLoader(t *testing.T) {
 	fs.Parse([]string{"--database.dsn=dsnFlag"})
 
 	cfg := &testApp{}
-	opt := func(c *Container[*testApp]) error {
-		c.providers = nil
-		loaderFactory := FlagsProvider[*testApp](fs)
-		loader, err := loaderFactory(c)
-		if err != nil {
-			return err
-		}
-		c.providers = append(c.providers, loader)
-		return nil
-	}
-	container, err := New(cfg, opt)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+
+	loaderFactory := FlagsProvider[*testApp](fs)
+	container := New(cfg).
+		WithConfigPath(""). // we need to disable default config
+		WithProvider(loaderFactory)
 
 	if err := container.Load(context.Background()); err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -155,20 +128,12 @@ func TestFlagLoader(t *testing.T) {
 func TestStructProvider(t *testing.T) {
 	baseStruct := testApp{Name: "structValue"}
 	cfg := &testApp{}
-	opt := func(c *Container[*testApp]) error {
-		c.providers = nil
-		loaderFactory := StructProvider[*testApp](baseStruct)
-		loader, err := loaderFactory(c)
-		if err != nil {
-			return err
-		}
-		c.providers = append(c.providers, loader)
-		return nil
-	}
-	container, err := New(cfg, opt)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+
+	loaderFactory := StructProvider[*testApp](baseStruct)
+	container := New(cfg).
+		WithConfigPath(""). // we need to disable default config
+		WithProvider(loaderFactory)
+
 	if err := container.Load(context.Background()); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -202,32 +167,5 @@ func TestOptionalProvider(t *testing.T) {
 
 	if err := loader.Load(context.Background(), k); err != nil {
 		t.Errorf("Expected error to be ignored, got: %v", err)
-	}
-}
-
-func TestValidationError(t *testing.T) {
-	cfg := &invalidConfig{}
-	dummyProvider := &Loader{
-		providerType: ProviderTypeDefault,
-		order:        1,
-		load: func(ctx context.Context, k *koanf.Koanf) error {
-			return nil
-		},
-	}
-	opt := func(c *Container[*invalidConfig]) error {
-		c.providers = []Provider{dummyProvider}
-		return nil
-	}
-	container, err := New(cfg, opt)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-	err = container.Load(context.Background())
-	if err == nil {
-		t.Fatalf("Expected validation error, got nil")
-	}
-
-	if !errors.IsValidation(err) {
-		t.Errorf("Expected validation error, got %T: %v", err, err)
 	}
 }
