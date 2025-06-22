@@ -33,9 +33,45 @@ type Container[C Validable] struct {
 	configPath   string
 	solvers      []solvers.ConfigSolver
 	logger       logger.Logger
+
+	loaders []LoaderBuilder[C]
 }
 
-func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
+func (c *Container[C]) WithValidation(v bool) *Container[C] {
+	c.mustValidate = v
+	return c
+}
+
+func (c *Container[C]) WithTimeout(timeout time.Duration) *Container[C] {
+	c.loadTimeout = timeout
+	return c
+}
+
+func (c *Container[C]) WithConfigPath(p string) *Container[C] {
+	c.configPath = p
+	return c
+}
+
+func (c *Container[C]) WithSolver(slvrs ...solvers.ConfigSolver) *Container[C] {
+	c.solvers = append(c.solvers, slvrs...)
+	return c
+}
+
+func (c *Container[C]) WithLogger(l logger.Logger) *Container[C] {
+	c.logger = l
+	return c
+}
+
+func (c *Container[C]) WithProvider(factories ...LoaderBuilder[C]) *Container[C] {
+	for _, factory := range factories {
+		if factory != nil {
+			c.loaders = append(c.loaders, factory)
+		}
+	}
+	return c
+}
+
+func New[C Validable](c C) *Container[C] {
 
 	mgr := &Container[C]{
 		mustValidate: true,
@@ -51,50 +87,12 @@ func New[C Validable](c C, opts ...Option[C]) (*Container[C], error) {
 		},
 	}
 
-	for i, opt := range opts {
-		err := opt(mgr)
-		if err != nil {
-			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to apply configuration option").
-				WithTextCode("CONFIG_OPTION_FAILED").
-				WithMetadata(map[string]any{
-					"option_index":  i,
-					"total_options": len(opts),
-				})
-		}
-	}
-
-	// providers could have been set via options
-	if len(mgr.providers) == 0 && mgr.configPath != "" {
-		mgr.logger.Debug("no providers, loading default...")
-		f := OptionalProvider(FileProvider[C](mgr.configPath))
-		p, err := f(mgr)
-		if err != nil {
-			return nil, errors.Wrap(err, errors.CategoryOperation, "failed to create default file provider").
-				WithTextCode("DEFAULT_PROVIDER_FAILED").
-				WithMetadata(map[string]any{
-					"config_path": mgr.configPath,
-				})
-		}
-		mgr.providers = append(mgr.providers, p)
-	}
-
-	for i, src := range mgr.providers {
-		if err := src.Type().Valid(); err != nil {
-			return nil, errors.Wrap(err, errors.CategoryValidation, "invalid provider source type").
-				WithTextCode("INVALID_PROVIDER_TYPE").
-				WithMetadata(map[string]any{
-					"source_type":    string(src.Type()),
-					"provider_index": i,
-				})
-		}
-	}
-
 	mgr.K = koanf.NewWithConf(koanf.Conf{
 		Delim:       mgr.delimiter,
 		StrictMerge: mgr.strictMerge,
 	})
 
-	return mgr, nil
+	return mgr
 }
 
 func (c *Container[C]) Validate() error {
@@ -120,10 +118,54 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
 
+	if len(c.loaders) > 0 {
+		c.providers = nil
+		for i, factory := range c.loaders {
+			provider, err := factory(c)
+			if err != nil {
+				return errors.Wrap(err, errors.CategoryOperation, "failed to create provider").
+					WithTextCode("PROVIDER_CREATION_FAILED").
+					WithMetadata(map[string]any{
+						"factory_index":   i,
+						"total_factories": len(c.loaders),
+					})
+			}
+			c.providers = append(c.providers, provider)
+		}
+	}
+
+	// providers could have been set via options
+	if len(c.providers) == 0 && len(c.loaders) == 0 && c.configPath != "" {
+		c.logger.Debug("no providers specified, loading default file provider...")
+		f := OptionalProvider(FileProvider[C](c.configPath))
+		p, err := f(c)
+		if err != nil {
+			return errors.Wrap(err, errors.CategoryOperation, "failed to create default file provider").
+				WithTextCode("DEFAULT_PROVIDER_FAILED").
+				WithMetadata(map[string]any{
+					"config_path": c.configPath,
+				})
+		}
+		c.providers = append(c.providers, p)
+	}
+
+	// validate our providers
+	for i, src := range c.providers {
+		if err := src.Validate(); err != nil {
+			return errors.Wrap(err, errors.CategoryValidation, "invalid provider source type").
+				WithTextCode("INVALID_PROVIDER_TYPE").
+				WithMetadata(map[string]any{
+					"source_type":    string(src.Type()),
+					"provider_index": i,
+				})
+		}
+	}
+
 	sort.Slice(c.providers, func(i, j int) bool {
 		return c.providers[i].Priority() < c.providers[j].Priority()
 	})
 
+	// load providers
 	for i, source := range c.providers {
 		c.logger.Debug("= loading source", "source_type", source.Type())
 		if err := source.Load(ctx, c.K); err != nil {
@@ -137,10 +179,12 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		}
 	}
 
+	// run all solvers
 	for _, solver := range c.solvers {
 		solver.Solve(c.K)
 	}
 
+	// unmarshal configuration into our base struct
 	if err := c.K.Unmarshal("", c.base); err != nil {
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
@@ -150,6 +194,7 @@ func (c *Container[C]) Load(ctx context.Context) error {
 			})
 	}
 
+	// we can now validate the resulting config object
 	if c.mustValidate {
 		if err := c.Validate(); err != nil {
 			return err // already wrapped in Validate() method
