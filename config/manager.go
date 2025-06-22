@@ -115,8 +115,18 @@ func (c *Container[C]) MustValidate() *Container[C] {
 	return c
 }
 
+func (c *Container[C]) MustLoadWithDefaults() {
+	c.MustLoad(context.Background())
+}
+
 func (c *Container[C]) LoadWithDefaults() error {
 	return c.Load(context.Background())
+}
+
+func (c *Container[C]) MustLoad(ctx context.Context) {
+	if err := c.Load(ctx); err != nil {
+		panic(fmt.Sprintf("Failed to load configuration: %v", err))
+	}
 }
 
 func (c *Container[C]) Load(ctx context.Context) error {
@@ -207,12 +217,6 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (c *Container[C]) MustLoad(ctx context.Context) {
-	if err := c.Load(ctx); err != nil {
-		panic(fmt.Sprintf("Failed to load configuration: %v", err))
-	}
 }
 
 func (c *Container[C]) Raw() C {
