@@ -34,7 +34,7 @@ type Container[C Validable] struct {
 	solvers      []solvers.ConfigSolver
 	logger       logger.Logger
 
-	loaders []LoaderBuilder[C]
+	loaders []ProviderBuilder[C]
 }
 
 func (c *Container[C]) WithValidation(v bool) *Container[C] {
@@ -67,7 +67,7 @@ func (c *Container[C]) WithLogger(l logger.Logger) *Container[C] {
 	return c
 }
 
-func (c *Container[C]) WithProvider(factories ...LoaderBuilder[C]) *Container[C] {
+func (c *Container[C]) WithProvider(factories ...ProviderBuilder[C]) *Container[C] {
 	for _, factory := range factories {
 		if factory != nil {
 			c.loaders = append(c.loaders, factory)
