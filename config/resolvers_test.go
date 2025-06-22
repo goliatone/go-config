@@ -8,12 +8,7 @@ import (
 func TestContainerSolvers(t *testing.T) {
 	app := &testApp{}
 
-	container, err := New(app,
-		WithConfigPath[*testApp]("testdata/resolvers.json"),
-	)
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
+	container := New(app).WithConfigPath("testdata/resolvers.json")
 
 	if err := container.Load(context.Background()); err != nil {
 		t.Fatalf("Load failed: %v", err)
