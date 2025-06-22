@@ -24,6 +24,7 @@ type ProviderType string
 type Provider interface {
 	Type() ProviderType
 	Priority() int
+	Validate() error
 	Load(context.Context, *koanf.Koanf) error
 }
 
@@ -43,6 +44,10 @@ func (l *Loader) Type() ProviderType {
 
 func (l *Loader) Load(ctx context.Context, k *koanf.Koanf) error {
 	return l.load(ctx, k)
+}
+
+func (l *Loader) Validate() error {
+	return l.providerType.validate()
 }
 
 const (
@@ -79,7 +84,7 @@ func (s ProviderType) String() string {
 	return string(s)
 }
 
-func (p ProviderType) Valid() error {
+func (p ProviderType) validate() error {
 	switch p {
 	case ProviderTypeDefault, ProviderTypeLocalFile, ProviderTypeEnv, ProviderTypeFlag, ProviderTypeStruct:
 		return nil
