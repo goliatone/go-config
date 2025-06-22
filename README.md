@@ -63,10 +63,10 @@ func main() {
 	cfg := &AppConfig{}
 
 	// Create container with default file provider (config/app.json)
-	container config.New(cfg)
+	container := config.New(cfg)
 
 	// Load configuration
-	if err := container.Load(context.Background()); err != nil {
+	if err := container.LoadWithDefaults(); err != nil {
 		panic(err)
 	}
 
