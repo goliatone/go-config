@@ -1,5 +1,23 @@
 # Changelog
 
+# [0.3.1](https://github.com/goliatone/go-config/compare/v0.3.0...v0.3.1) - (2025-06-24)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.3.1 ([1e99f59](https://github.com/goliatone/go-config/commit/1e99f596e0f156ed51ed595069b845c706003d5f))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- New MustLoadWithDefaults method ([d56c36d](https://github.com/goliatone/go-config/commit/d56c36d6bfd344ef6694c369d664a7178b471fb4))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.3.0 ([1a3cfcd](https://github.com/goliatone/go-config/commit/1a3cfcd9159f0362fcb7ca5a08d1fa94082bd9f6))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([f51c656](https://github.com/goliatone/go-config/commit/f51c656ecbaf89eabb8c9110ebf31813ec189141))  - (goliatone)
+
 # [0.3.0](https://github.com/goliatone/go-config/compare/v0.2.0...v0.3.0) - (2025-06-22)
 
 ## <!-- 1 -->🐛 Bug Fixes
