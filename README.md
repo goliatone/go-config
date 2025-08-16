@@ -24,6 +24,25 @@ The configuration container is a flexible package for Go that loads configuratio
 - **Variable Substitution**: Built-in support for variable substitution (e.g. env vars) and URI solving.
 - **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
+### Struct Tag Configuration for File Parsing
+
+When loading from YAML or JSON files, you need to provide appropriate struct tags to map file keys to struct fields:
+
+```go
+type Config struct {
+    // For YAML files with snake_case keys
+    ServerPort int    `json:"server_port" yaml:"server_port"`
+    APIKey     string `json:"api_key" yaml:"api_key"`
+    
+    // Nested structures
+    Database struct {
+        MaxConns int `json:"max_conns" yaml:"max_conns"`
+    } `json:"database" yaml:"database"`
+}
+```
+
+**Important**: The `koanf` tags are used internally for key paths, but you still need `json` and `yaml` tags for proper file parsing.
+
 ### Basic Example
 
 ```go
@@ -141,22 +160,37 @@ func main() {
 
 ```go
 // Disable validation
-container.WithValidation[*AppConfig](false)
+container.WithValidation(false)
 
 // Custom config file path
-container.WithConfigPath[*AppConfig]("custom/path.json")
-
-// Disable default config file loading
-container.WithoutDefaultConfigPath[*AppConfig]()
+container.WithConfigPath("custom/path.json")
 
 // Add custom logger
-container.WithLogger[*AppConfig](myLogger)
+container.WithLogger(myLogger)
 
 // Add variable solvers for substitution
-container.WithSolver[*AppConfig](
+container.WithSolver(
 	solvers.NewVariablesSolver("${", "}"),
 	solvers.NewURISolver("@", "://"),
 )
+```
+
+### Loading Methods
+
+The library provides multiple loading methods:
+
+```go
+// Load with explicit context (recommended)
+err := container.Load(context.Background())
+
+// LoadWithDefaults - convenience method that uses context.Background()
+err := container.LoadWithDefaults()
+
+// MustLoad - panics on error
+container.MustLoad(context.Background())
+
+// MustLoadWithDefaults - panics on error, uses context.Background()
+container.MustLoadWithDefaults()
 ```
 
 ### Provider Order
@@ -173,6 +207,72 @@ You can customize the order when creating providers:
 
 ```go
 config.FileProvider[*AppConfig]("config.json", 15) // Custom order
+```
+
+### FileProvider with Complex Configurations
+
+When using FileProvider with complex nested structures, be aware that the provider may not properly merge deeply nested values. Consider this approach:
+
+```go
+// Method 1: Using go-config FileProvider (may have issues with deep nesting)
+container := config.New(cfg).
+    WithProvider(
+        config.FileProvider[*Config]("config.yaml"),
+        config.EnvProvider[*Config]("APP_", "_"),
+    )
+
+// Method 2: Manual parsing for complex YAML (more reliable)
+func LoadConfig(path string) (*Config, error) {
+    cfg := &Config{}
+    
+    // Parse YAML manually first
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+    
+    if err := yaml.Unmarshal(data, cfg); err != nil {
+        return nil, err
+    }
+    
+    // Then apply environment overrides
+    container := config.New(cfg).
+        WithProvider(config.EnvProvider[*Config]("APP_", "_"))
+    
+    if err := container.Load(context.Background()); err != nil {
+        return nil, err
+    }
+    
+    return container.Raw(), nil
+}
+```
+
+### Handling Boolean Fields and Defaults
+
+Boolean fields require special consideration when applying defaults:
+
+```go
+type Config struct {
+    Features struct {
+        EnableCache   bool `yaml:"enable_cache"`
+        EnableMetrics bool `yaml:"enable_metrics"`
+    } `yaml:"features"`
+}
+
+func applyDefaults(cfg *Config) {
+    // Problem: Can't distinguish between "not set" and "explicitly false"
+    // Solution 1: Check if all booleans in a group are false
+    if !cfg.Features.EnableCache && !cfg.Features.EnableMetrics {
+        // Likely not set, apply defaults
+        cfg.Features.EnableCache = true
+        cfg.Features.EnableMetrics = true
+    }
+    
+    // Solution 2: Use pointers for optional booleans
+    type ConfigWithPointers struct {
+        EnableFeature *bool `yaml:"enable_feature"`
+    }
+}
 ```
 
 ## Solvers
@@ -367,6 +467,148 @@ This produces a JSON structure like this:
 }
 ```
 
+
+### Debugging Configuration Loading
+
+When configuration values aren't loading as expected:
+
+1. **Enable Debug Logging**: The library logs debug information about which values are loaded from which sources.
+
+2. **Check Provider Order**: Remember providers are applied in order of precedence:
+   - Later providers override earlier ones
+   - Environment variables (precedence 30) override files (precedence 20)
+
+3. **Validate Struct Tags**: Ensure your struct has proper tags for the file format:
+   ```go
+   // Correct
+   type Config struct {
+       Port int `json:"port" yaml:"port"`
+   }
+   
+   // Incorrect - missing file format tags
+   type Config struct {
+       Port int `koanf:"port"` // koanf alone isn't enough for file parsing
+   }
+   ```
+
+4. **Test File Parsing Separately**: 
+   ```go
+   // Test if your YAML/JSON parses correctly
+   var cfg Config
+   data, _ := os.ReadFile("config.yaml")
+   err := yaml.Unmarshal(data, &cfg)
+   if err != nil {
+       log.Printf("YAML parsing error: %v", err)
+   }
+   ```
+
+### Complete Configuration Example
+
+Here's a complete example showing best practices for configuration loading:
+
+```go
+package config
+
+import (
+    "context"
+    "fmt"
+    "os"
+    "path/filepath"
+    
+    "github.com/goliatone/go-config/config"
+    "gopkg.in/yaml.v3"
+)
+
+type AppConfig struct {
+    Server struct {
+        Host string `json:"host" yaml:"host"`
+        Port int    `json:"port" yaml:"port"`
+    } `json:"server" yaml:"server"`
+    
+    Database struct {
+        DSN        string `json:"dsn" yaml:"dsn"`
+        MaxConns   int    `json:"max_conns" yaml:"max_conns"`
+    } `json:"database" yaml:"database"`
+    
+    Features struct {
+        RateLimit bool `json:"rate_limit" yaml:"rate_limit"`
+        Caching   bool `json:"caching" yaml:"caching"`
+    } `json:"features" yaml:"features"`
+}
+
+func (c *AppConfig) Validate() error {
+    if c.Server.Port <= 0 || c.Server.Port > 65535 {
+        return fmt.Errorf("invalid server port: %d", c.Server.Port)
+    }
+    if c.Database.DSN == "" {
+        return fmt.Errorf("database DSN is required")
+    }
+    return nil
+}
+
+func LoadConfig(configPath string) (*AppConfig, error) {
+    cfg := &AppConfig{
+        // Set defaults
+        Server: struct {
+            Host string `json:"host" yaml:"host"`
+            Port int    `json:"port" yaml:"port"`
+        }{
+            Host: "localhost",
+            Port: 8080,
+        },
+        Database: struct {
+            DSN      string `json:"dsn" yaml:"dsn"`
+            MaxConns int    `json:"max_conns" yaml:"max_conns"`
+        }{
+            MaxConns: 10,
+        },
+    }
+    
+    // Load from file if it exists
+    if configPath != "" {
+        if _, err := os.Stat(configPath); err == nil {
+            data, err := os.ReadFile(configPath)
+            if err != nil {
+                return nil, fmt.Errorf("failed to read config: %w", err)
+            }
+            
+            ext := filepath.Ext(configPath)
+            switch ext {
+            case ".yaml", ".yml":
+                err = yaml.Unmarshal(data, cfg)
+            case ".json":
+                err = json.Unmarshal(data, cfg)
+            default:
+                return nil, fmt.Errorf("unsupported format: %s", ext)
+            }
+            
+            if err != nil {
+                return nil, fmt.Errorf("failed to parse config: %w", err)
+            }
+        }
+    }
+    
+    // Apply environment overrides
+    container := config.New(cfg).
+        WithValidation(false). // Validate manually after loading
+        WithProvider(
+            config.EnvProvider[*AppConfig]("APP_", "_"),
+        )
+    
+    if err := container.Load(context.Background()); err != nil {
+        return nil, fmt.Errorf("failed to load env overrides: %w", err)
+    }
+    
+    finalConfig := container.Raw()
+    
+    // Validate final configuration
+    if err := finalConfig.Validate(); err != nil {
+        return nil, fmt.Errorf("config validation failed: %w", err)
+    }
+    
+    return finalConfig, nil
+}
+```
 
 ### Merge
 
