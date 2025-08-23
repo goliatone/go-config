@@ -1,5 +1,20 @@
 # Changelog
 
+# [0.3.2](https://github.com/goliatone/go-config/compare/v0.3.1...v0.3.2) - (2025-08-23)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.3.2 ([c4fc1a3](https://github.com/goliatone/go-config/commit/c4fc1a305e8c628cc915fd5c19a0f4e331663858))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.3.1 ([852987c](https://github.com/goliatone/go-config/commit/852987c5f216fc1bbfaa578788bd0a8299016131))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([9f2e218](https://github.com/goliatone/go-config/commit/9f2e2183e331d46159c23e3612e6bab5dec44051))  - (goliatone)
+- Update readme ([0a9de14](https://github.com/goliatone/go-config/commit/0a9de140ddb9ea22be639e0dd8a22414495d8dd0))  - (goliatone)
+
 # [0.3.1](https://github.com/goliatone/go-config/compare/v0.3.0...v0.3.1) - (2025-06-24)
 
 ## <!-- 13 -->📦 Bumps
