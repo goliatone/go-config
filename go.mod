@@ -3,7 +3,7 @@ module github.com/goliatone/go-config
 go 1.23.4
 
 require (
-	github.com/goliatone/go-errors v0.5.0
+	github.com/goliatone/go-errors v0.9.0
 	github.com/knadh/koanf/parsers/json v0.1.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/parsers/yaml v0.1.0
