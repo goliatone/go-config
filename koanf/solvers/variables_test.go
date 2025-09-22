@@ -10,7 +10,7 @@ import (
 
 func TestKSolver_Variables(t *testing.T) {
 	notMatching := "${nothing}"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"server": map[string]any{
 			"base_url": "${base_url}",
 		},
@@ -49,7 +49,7 @@ func TestKSolver_Variables(t *testing.T) {
 
 func TestKSolver_Variables_custom_delimeters(t *testing.T) {
 	notMatching := "@/nothing/"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"server": map[string]any{
 			"base_url": "@/base_url/",
 		},
@@ -88,7 +88,7 @@ func TestKSolver_Variables_custom_delimeters(t *testing.T) {
 
 func TestKSolver_Variables_custom_delimeters2(t *testing.T) {
 	notMatching := "{{nothing}}"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"server": map[string]any{
 			"base_url": "{{base_url}}",
 		},
@@ -127,7 +127,7 @@ func TestKSolver_Variables_custom_delimeters2(t *testing.T) {
 
 func TestKSolver_Variables_non_matching(t *testing.T) {
 	notMatching := "${nothing}"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"server": map[string]any{
 			"base_url": "${base_url}",
 		},
@@ -162,4 +162,22 @@ func TestKSolver_Variables_non_matching(t *testing.T) {
 		notMatching,
 		out.Get("not_matching"),
 	)
+}
+
+func TestKSolver_Variables_embedded(t *testing.T) {
+	defaultValues := map[string]any{
+		"host": "localhost",
+		"lang": "en",
+		"server": map[string]any{
+			"endpoint": "http://${host}/api/v0/${lang}",
+		},
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewVariablesSolver("${", "}")
+	out := solver.Solve(k)
+
+	assert.Equal(t, "http://localhost/api/v0/en", out.Get("server.endpoint"))
 }
