@@ -92,12 +92,16 @@ func New[C Validable](c C) *Container[C] {
 		},
 	}
 
-	mgr.K = koanf.NewWithConf(koanf.Conf{
-		Delim:       mgr.delimiter,
-		StrictMerge: mgr.strictMerge,
-	})
+	mgr.newConfig()
 
 	return mgr
+}
+
+func (c *Container[C]) newConfig() {
+	c.K = koanf.NewWithConf(koanf.Conf{
+		Delim:       c.delimiter,
+		StrictMerge: c.strictMerge,
+	})
 }
 
 func (c *Container[C]) Validate() error {
@@ -132,6 +136,9 @@ func (c *Container[C]) MustLoad(ctx context.Context) {
 func (c *Container[C]) Load(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
+
+	// reset config state i.e. so if we remove keys the are gone
+	c.newConfig()
 
 	if len(c.loaders) > 0 {
 		c.providers = nil

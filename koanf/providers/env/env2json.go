@@ -61,6 +61,7 @@ func ProviderWithValue(prefix, delim string, cb func(key string, value string) (
 		prefix: prefix,
 		delim:  delim,
 		cb:     cb,
+		out:    "{}",
 		logger: &logger.DefaultLogger{},
 	}
 }

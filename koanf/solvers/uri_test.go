@@ -13,7 +13,7 @@ import (
 )
 
 func TestKSolver_base64(t *testing.T) {
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"password": "@base64://I3B3MTI7UmFkZCRhLjI0Mw==",
 	}
 
@@ -34,7 +34,7 @@ func TestKSolver_base64(t *testing.T) {
 
 func TestKSolver_URLs(t *testing.T) {
 	notMatching := "@file://nothing"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"version": "@file://testdata/version.txt",
 		"context": map[string]any{
 			"version": "${version}",
@@ -71,7 +71,7 @@ func TestKSolver_URLs(t *testing.T) {
 
 func TestKSolver_URLs_with_fs(t *testing.T) {
 	notMatching := "@file://nothing"
-	defaultValues := map[string]interface{}{
+	defaultValues := map[string]any{
 		"version": "@file://testdata/version.txt",
 		"context": map[string]any{
 			"version": "${version}",

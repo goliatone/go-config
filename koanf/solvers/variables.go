@@ -37,36 +37,52 @@ func (s variables) Solve(config *koanf.Koanf) *koanf.Koanf {
 }
 
 func (s variables) keypath(key, val string, config *koanf.Koanf) {
-	start := strings.Index(val, s.delimeters.Start)
-	if start == -1 {
-		return
+	current := val
+
+	for {
+		start := strings.Index(current, s.delimeters.Start)
+		if start == -1 {
+			break
+		}
+
+		contentStart := start + len(s.delimeters.Start)
+		endOffset := strings.Index(current[contentStart:], s.delimeters.End)
+		if endOffset == -1 {
+			break
+		}
+
+		contentEnd := contentStart + endOffset
+		path := current[contentStart:contentEnd]
+		if path == "" || path == key {
+			break
+		}
+
+		if !config.Exists(path) {
+			break
+		}
+
+		resolved := config.Get(path)
+		isFullMatch := start == 0 && contentEnd+len(s.delimeters.End) == len(current)
+
+		if isFullMatch {
+			if key == path {
+				break
+			}
+			config.Set(key, resolved)
+			return
+		}
+
+		next := s.replaceValue(current, resolved)
+		if next == current {
+			break
+		}
+
+		current = next
 	}
 
-	if len(s.delimeters.Start) > 1 {
-		start = start + len(s.delimeters.Start)
+	if current != val {
+		config.Set(key, current)
 	}
-
-	end := strings.Index(val[start:], s.delimeters.End)
-	if end == -1 || end < start {
-		return
-	}
-	end = end + len(s.delimeters.Start)
-
-	path := val[start:end]
-	if path == val {
-		return
-	}
-
-	if !config.Exists(path) {
-		return
-	}
-
-	newVal := config.Get(path)
-	if len(s.delimeters.Start)+len(path)+len(s.delimeters.End) != len(val) {
-		newVal = s.replaceValue(val, newVal)
-	}
-
-	config.Set(key, newVal)
 }
 
 func (s variables) replaceValue(input string, replacement any) string {

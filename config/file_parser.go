@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/parsers/json"
@@ -56,7 +57,7 @@ const (
 
 func inferConfigFiletype(path string, defaultFileType ...ConfigFileType) ConfigFileType {
 	ext := filepath.Ext(path)
-	switch ext {
+	switch strings.ToLower(ext) {
 	case ".toml":
 		return FileTypeTOML
 	case ".json":

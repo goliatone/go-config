@@ -3,7 +3,9 @@ package config
 import (
 	"context"
 	goerrors "errors"
+	"os"
 	"strings"
+	"syscall"
 
 	"github.com/goliatone/go-config/koanf/providers/env"
 	"github.com/goliatone/go-errors"
@@ -256,7 +258,8 @@ func DefaultErrorFilter(allowedErrors ...error) ErrorFilter {
 		}
 
 		if len(allowedErrors) == 0 {
-			return true
+			// ignore absent files but surface other errors i.e. JSON parsing blow up
+			return os.IsNotExist(err) || goerrors.Is(err, syscall.ENOENT)
 		}
 
 		for _, allowed := range allowedErrors {
@@ -264,6 +267,7 @@ func DefaultErrorFilter(allowedErrors ...error) ErrorFilter {
 				return true
 			}
 		}
+
 		return false
 	}
 }
