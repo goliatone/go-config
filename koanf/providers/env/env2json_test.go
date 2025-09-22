@@ -190,7 +190,7 @@ func TestProviderWithValue(t *testing.T) {
 	setEnv(t, "TEST_DATABASE__PASSWORD", "password")
 	defer unsetEnv(t, "TEST_DATABASE__PASSWORD")
 
-	provider := ProviderWithValue("TEST_", "__", func(key string, value string) (string, interface{}) {
+	provider := ProviderWithValue("TEST_", "__", func(key string, value string) (string, any) {
 		return strings.ToLower(strings.Replace(key, "TEST_", "", 1)), []string{value}
 	})
 	data, err := provider.ReadBytes()
