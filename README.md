@@ -14,14 +14,14 @@ go get github.com/goliatone/go-config
 
 ## Configuration Container
 
-The configuration container is a flexible package for Go that loads configuration values from multiple sources (files, environment variables, command-line flags, and in-code structs). It supports merging, validation, and variable substitution through configurable solvers.
+The configuration container is a flexible package for Go that loads configuration values from multiple sources (files, environment variables, command line flags, and in-code structs). It supports merging, validation, and variable substitution through configurable solvers.
 
 ### Features
-- **Multi-Source Loading**: Load configuration from JSON, YAML, or TOML files, environment variables, command-line flags, or directly from Go structs.
+- **Multi-Source Loading**: Load configuration from JSON, YAML, or TOML files, environment variables, command line flags, or directly from Go structs.
 - **Validation**: Each configuration struct can implement a `Validate()` method to enforce required rules.
 - **Flexible Merging**: Loaders are applied in a defined order so that later sources override earlier values.
 - **Optional Loaders**: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
-- **Variable Substitution**: Built-in support for variable substitution (e.g. env vars) and URI solving.
+- **Variable Substitution**: Built in support for variable substitution (e.g. env vars) and URI solving.
 - **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
 ### Struct Tag Configuration for File Parsing
@@ -33,7 +33,7 @@ type Config struct {
     // For YAML files with snake_case keys
     ServerPort int    `json:"server_port" yaml:"server_port"`
     APIKey     string `json:"api_key" yaml:"api_key"`
-    
+
     // Nested structures
     Database struct {
         MaxConns int `json:"max_conns" yaml:"max_conns"`
@@ -211,7 +211,7 @@ config.FileProvider[*AppConfig]("config.json", 15) // Custom order
 
 ### FileProvider with Complex Configurations
 
-When using FileProvider with complex nested structures, be aware that the provider may not properly merge deeply nested values. Consider this approach:
+When using `FileProvider` with complex nested structures, be aware that the provider may not properly merge deeply nested values. Consider this approach:
 
 ```go
 // Method 1: Using go-config FileProvider (may have issues with deep nesting)
@@ -224,25 +224,25 @@ container := config.New(cfg).
 // Method 2: Manual parsing for complex YAML (more reliable)
 func LoadConfig(path string) (*Config, error) {
     cfg := &Config{}
-    
+
     // Parse YAML manually first
     data, err := os.ReadFile(path)
     if err != nil {
         return nil, err
     }
-    
+
     if err := yaml.Unmarshal(data, cfg); err != nil {
         return nil, err
     }
-    
+
     // Then apply environment overrides
     container := config.New(cfg).
         WithProvider(config.EnvProvider[*Config]("APP_", "_"))
-    
+
     if err := container.Load(context.Background()); err != nil {
         return nil, err
     }
-    
+
     return container.Raw(), nil
 }
 ```
@@ -267,7 +267,7 @@ func applyDefaults(cfg *Config) {
         cfg.Features.EnableCache = true
         cfg.Features.EnableMetrics = true
     }
-    
+
     // Solution 2: Use pointers for optional booleans
     type ConfigWithPointers struct {
         EnableFeature *bool `yaml:"enable_feature"`
@@ -388,7 +388,7 @@ uriSolver := solvers.NewURISolver("->", "://")
 
 #### `base64`
 
-The `base64` solver will let you encode a value using base64 and solve the value on load. This is helpful in situations in which you might have characters that could break your environment variables.
+The `base64` solver will let you encode a value using `base64` and solve the value on load. This is helpful in situations in which you might have characters that could break your environment variables.
 
 ```json
 {
@@ -407,7 +407,7 @@ Will replace the reference with the decoded value of the variable:
 ## Providers
 
 ### Env
-Enhanced environment variable provider for [koanf](https://github.com/knadh/koanf) that extends the built-in functionality with support for arrays and nested structures through environment variables.
+Enhanced environment variable provider for [koanf](https://github.com/knadh/koanf) that extends the built in functionality with support for arrays and nested structures through environment variables.
 
 **Features**:
 - Array support through indexed environment variables
@@ -484,14 +484,14 @@ When configuration values aren't loading as expected:
    type Config struct {
        Port int `json:"port" yaml:"port"`
    }
-   
+
    // Incorrect - missing file format tags
    type Config struct {
        Port int `koanf:"port"` // koanf alone isn't enough for file parsing
    }
    ```
 
-4. **Test File Parsing Separately**: 
+4. **Test File Parsing Separately**:
    ```go
    // Test if your YAML/JSON parses correctly
    var cfg Config
@@ -514,7 +514,7 @@ import (
     "fmt"
     "os"
     "path/filepath"
-    
+
     "github.com/goliatone/go-config/config"
     "gopkg.in/yaml.v3"
 )
@@ -524,12 +524,12 @@ type AppConfig struct {
         Host string `json:"host" yaml:"host"`
         Port int    `json:"port" yaml:"port"`
     } `json:"server" yaml:"server"`
-    
+
     Database struct {
         DSN        string `json:"dsn" yaml:"dsn"`
         MaxConns   int    `json:"max_conns" yaml:"max_conns"`
     } `json:"database" yaml:"database"`
-    
+
     Features struct {
         RateLimit bool `json:"rate_limit" yaml:"rate_limit"`
         Caching   bool `json:"caching" yaml:"caching"`
@@ -563,7 +563,7 @@ func LoadConfig(configPath string) (*AppConfig, error) {
             MaxConns: 10,
         },
     }
-    
+
     // Load from file if it exists
     if configPath != "" {
         if _, err := os.Stat(configPath); err == nil {
@@ -571,7 +571,7 @@ func LoadConfig(configPath string) (*AppConfig, error) {
             if err != nil {
                 return nil, fmt.Errorf("failed to read config: %w", err)
             }
-            
+
             ext := filepath.Ext(configPath)
             switch ext {
             case ".yaml", ".yml":
@@ -581,31 +581,31 @@ func LoadConfig(configPath string) (*AppConfig, error) {
             default:
                 return nil, fmt.Errorf("unsupported format: %s", ext)
             }
-            
+
             if err != nil {
                 return nil, fmt.Errorf("failed to parse config: %w", err)
             }
         }
     }
-    
+
     // Apply environment overrides
     container := config.New(cfg).
         WithValidation(false). // Validate manually after loading
         WithProvider(
             config.EnvProvider[*AppConfig]("APP_", "_"),
         )
-    
+
     if err := container.Load(context.Background()); err != nil {
         return nil, fmt.Errorf("failed to load env overrides: %w", err)
     }
-    
+
     finalConfig := container.Raw()
-    
+
     // Validate final configuration
     if err := finalConfig.Validate(); err != nil {
         return nil, fmt.Errorf("config validation failed: %w", err)
     }
-    
+
     return finalConfig, nil
 }
 ```
