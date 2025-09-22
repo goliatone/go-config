@@ -1,5 +1,37 @@
 # Changelog
 
+# [0.4.0](https://github.com/goliatone/go-config/compare/v0.3.2...v0.4.0) - (2025-09-22)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Simplify example ([50a7987](https://github.com/goliatone/go-config/commit/50a7987be72aceeb3b57e66cec05bff2197d915a))  - (goliatone)
+- Solvers should handle non start keywords ([b544609](https://github.com/goliatone/go-config/commit/b544609e3356370a0e403c0e26c865b890514099))  - (goliatone)
+- Provide empty value to be object vs nil ([13276ee](https://github.com/goliatone/go-config/commit/13276eeb711f51edfa84c6e7e320a3a0fb63b7af))  - (goliatone)
+- Default error filer ignore absent files but catch other errors ([bc211e2](https://github.com/goliatone/go-config/commit/bc211e2a78c6909f2cdc36ad64905cb66200247f))  - (goliatone)
+- Reset state on each call to Load ([284b4dc](https://github.com/goliatone/go-config/commit/284b4dceb78b98303e4bc61bda2daf60bf5e4294))  - (goliatone)
+- Normalize file name to lowercase ([adbe390](https://github.com/goliatone/go-config/commit/adbe390eaf0f567cbd54197a3e35c5976432841f))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.4.0 ([3b20310](https://github.com/goliatone/go-config/commit/3b20310b39d5aaef40395b8ad3db2dad4ba55316))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Provider tests ([bc8b64e](https://github.com/goliatone/go-config/commit/bc8b64e334333ff5e1403b3b4c0f122ad46c56f8))  - (goliatone)
+- Multi placeholder support for variable solver ([56f353b](https://github.com/goliatone/go-config/commit/56f353b9bcacf318029957be75a6eb24f8f356f6))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.3.2 ([69c7ca5](https://github.com/goliatone/go-config/commit/69c7ca560b5e6ab8c19e3c3503ec4f1ac3aff3f4))  - (goliatone)
+
+## <!-- 30 -->📝 Other
+
+- PR [#4](https://github.com/goliatone/go-config/pull/4): code issues ([dd32481](https://github.com/goliatone/go-config/commit/dd32481559ebf417be5e5146f85a15ce29107f44))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([cedf55b](https://github.com/goliatone/go-config/commit/cedf55b4878b04403aba1d72f66734d0fff1db02))  - (goliatone)
+
 # [0.3.2](https://github.com/goliatone/go-config/compare/v0.3.1...v0.3.2) - (2025-08-23)
 
 ## <!-- 13 -->📦 Bumps
