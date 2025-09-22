@@ -1,9 +1,5 @@
 package config
 
-// func MergeDefaultValues(def map[string]any) error {
-
-// }
-
 func MergeIgnoringNullValues(src, dest map[string]any) error {
 	for k, v := range src {
 		dv, ok := dest[k]
