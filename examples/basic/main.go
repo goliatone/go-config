@@ -38,9 +38,7 @@ func (c App) Validate() error {
 
 func main() {
 	app := &App{}
-	config := config.New(app).
-		WithProvider(config.EnvProvider[*App]("APP_", "__")).
-		WithProvider(config.FileProvider[*App]("./config/app.json"))
+	config := config.New(app)
 
 	ctx := context.Background()
 
