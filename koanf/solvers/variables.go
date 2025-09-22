@@ -42,18 +42,17 @@ func (s variables) keypath(key, val string, config *koanf.Koanf) {
 		return
 	}
 
-	if len(s.delimeters.Start) > 1 {
-		start = start + len(s.delimeters.Start)
-	}
+	contentStart := start + len(s.delimeters.Start)
 
-	end := strings.Index(val[start:], s.delimeters.End)
-	if end == -1 || end < start {
+	endOffset := strings.Index(val[contentStart:], s.delimeters.End)
+	if endOffset == -1 {
 		return
 	}
-	end = end + len(s.delimeters.Start)
 
-	path := val[start:end]
-	if path == val {
+	contentEnd := contentStart + endOffset
+
+	path := val[contentStart:contentEnd]
+	if path == "" || path == val {
 		return
 	}
 
