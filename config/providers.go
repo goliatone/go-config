@@ -141,7 +141,7 @@ func FileProvider[C Validable](filepath string, orders ...int) ProviderBuilder[C
 			order:        getOrder(PriorityConfig, orders...),
 			load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("file provider", "filepath", filepath)
-				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
+				merger := koanf.WithMergeFunc(MergeWithBooleanPrecedence)
 				if err := k.Load(kprovider, parser, merger); err != nil {
 					return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from file").
 						WithTextCode("FILE_LOAD_FAILED").
@@ -166,7 +166,7 @@ func EnvProvider[C Validable](prefix, delim string, order ...int) ProviderBuilde
 			order:        getOrder(PriorityEnv, order...),
 			load: func(ctx context.Context, k *koanf.Koanf) error {
 				parser := json.Parser()
-				merger := koanf.WithMergeFunc(MergeIgnoringNullValues)
+				merger := koanf.WithMergeFunc(MergeWithBooleanPrecedence)
 				kprov := env.Provider(prefix, ".", func(s string) string {
 					return strings.Replace(strings.ToLower(
 						strings.TrimPrefix(s, prefix)), delim, ".", -1)
@@ -235,7 +235,8 @@ func StructProvider[C Validable](v Validable, order ...int) ProviderBuilder[C] {
 			order:        getOrder(PriorityStruct, order...),
 			load: func(ctx context.Context, k *koanf.Koanf) error {
 				c.logger.Debug("struct provider")
-				if err := k.Load(kprv, nil); err != nil {
+				merger := koanf.WithMergeFunc(MergeWithBooleanPrecedence)
+				if err := k.Load(kprv, nil, merger); err != nil {
 					return errors.Wrap(err,
 						errors.CategoryOperation,
 						"failed to load configuration from struct",
