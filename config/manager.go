@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/goliatone/go-config/koanf/solvers"
 	"github.com/goliatone/go-config/logger"
 	"github.com/goliatone/go-errors"
@@ -207,7 +208,17 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 
 	// unmarshal configuration into our base struct
-	if err := c.K.Unmarshal("", c.base); err != nil {
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			optionalBoolDecodeHook(),
+			mapstructure.StringToTimeDurationHookFunc(),
+			textUnmarshalerDecodeHook(),
+		),
+		Result:           c.base,
+		WeaklyTypedInput: true,
+	}
+
+	if err := c.K.UnmarshalWithConf("", c.base, koanf.UnmarshalConf{DecoderConfig: decoderConfig}); err != nil {
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
 			WithMetadata(map[string]any{
