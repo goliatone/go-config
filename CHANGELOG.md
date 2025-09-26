@@ -1,5 +1,30 @@
 # Changelog
 
+# [0.5.0](https://github.com/goliatone/go-config/compare/v0.4.0...v0.5.0) - (2025-09-26)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Merge bools ([7fdf839](https://github.com/goliatone/go-config/commit/7fdf839b7c4278e0d6f6d22e95da3209acaf5156))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.5.0 ([e1ac1f6](https://github.com/goliatone/go-config/commit/e1ac1f6d9dc716e37b59ad30a06e2feb3676b6eb))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Optional bools ([12575ec](https://github.com/goliatone/go-config/commit/12575ecd352bc7e8bd9662e66456fcf106e60e5d))  - (goliatone)
+- Decode hooks ([6911cfb](https://github.com/goliatone/go-config/commit/6911cfb09c177bf447f4a6bf273b42a3305c4af4))  - (goliatone)
+- Tests for hooks ([5929afd](https://github.com/goliatone/go-config/commit/5929afda518e2fc340ccf6efb6e30136b8e7f705))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.4.0 ([3ec47b4](https://github.com/goliatone/go-config/commit/3ec47b4ee9b860f33ebde339db2769a81c0ac97b))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([75645f3](https://github.com/goliatone/go-config/commit/75645f3e120402c8ce84b04181cf01ce70d2627e))  - (goliatone)
+- Update deps ([de8b9ea](https://github.com/goliatone/go-config/commit/de8b9eab17084f34cbcd0911498bcecf4a75d80d))  - (goliatone)
+
 # [0.4.0](https://github.com/goliatone/go-config/compare/v0.3.2...v0.4.0) - (2025-09-22)
 
 ## <!-- 1 -->🐛 Bug Fixes
