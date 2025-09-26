@@ -1,23 +1,19 @@
 package config
 
-import "reflect"
+import "strings"
 
 // MergeWithBooleanPrecedence merges src into dst with OptionalBool-aware precedence logic.
-// This function respects OptionalBool.IsSet() metadata for proper precedence decisions,
-// while maintaining backward compatibility with existing merge behavior for non-OptionalBool types.
+// OptionalBool values keep their pointer/value form and only overwrite when explicitly set.
 func MergeWithBooleanPrecedence(src, dst map[string]any) error {
 	return mergeRecursive(src, dst)
 }
 
-// mergeRecursive performs the recursive merge operation
 func mergeRecursive(src, dst map[string]any) error {
 	for key, srcVal := range src {
 		dstVal, exists := dst[key]
 
-		// Check if both source and destination are maps - if so, always recurse
 		if srcMap, ok := srcVal.(map[string]any); ok {
 			if dstMap, ok := dstVal.(map[string]any); ok {
-				// Recursive merge for maps
 				if err := mergeRecursive(srcMap, dstMap); err != nil {
 					return err
 				}
@@ -25,60 +21,167 @@ func mergeRecursive(src, dst map[string]any) error {
 			}
 		}
 
-		// For non-map values, determine if we should overwrite based on type-specific logic
-		shouldOverwrite := shouldOverwriteValue(dstVal, srcVal, exists)
-		if shouldOverwrite {
+		handled, err := mergeOptionalBoolValue(dst, key, srcVal, dstVal)
+		if err != nil {
+			return err
+		}
+		if handled {
+			continue
+		}
+
+		if shouldOverwriteValue(srcVal, exists) {
 			dst[key] = srcVal
 		}
 	}
 	return nil
 }
 
-// shouldOverwriteValue determines if the source value should overwrite the destination value
-func shouldOverwriteValue(dst, src any, dstExists bool) bool {
-	// Handle nil source values
+func shouldOverwriteValue(src any, dstExists bool) bool {
 	if src == nil {
 		return false
 	}
 
-	// Check if source is OptionalBool pointer (most common case)
-	if srcOB, ok := src.(*OptionalBool); ok {
-		// Handle nil OptionalBool pointer
-		if srcOB == nil {
-			return false
-		}
-		// OptionalBool source: only overwrite if explicitly set
-		return srcOB.IsSet()
-	}
-
-	// Check if source is OptionalBool by value (for interface{} containers)
-	if srcVal := reflect.ValueOf(src); srcVal.IsValid() && srcVal.Type() == reflect.TypeOf(OptionalBool{}) {
-		srcOB := srcVal.Interface().(OptionalBool)
-		return srcOB.IsSet()
-	}
-
-	// Non-OptionalBool types: use existing merge logic
-	return shouldOverwriteExisting(dst, src, dstExists)
-}
-
-// shouldOverwriteExisting implements the existing merge logic from MergeIgnoringNullValues
-func shouldOverwriteExisting(_, src any, dstExists bool) bool {
-	// If destination doesn't exist, always overwrite
 	if !dstExists {
 		return true
 	}
 
-	// Apply existing merge rules based on source type
-	switch srcVal := src.(type) {
+	switch v := src.(type) {
 	case string:
-		return srcVal != ""
+		return v != ""
 	case []any:
-		return len(srcVal) > 0
+		return len(v) > 0
 	case map[string]any:
-		// Maps are handled recursively, not overwritten
 		return false
 	default:
-		// All other types (including regular bool) always overwrite
 		return true
+	}
+}
+
+func mergeOptionalBoolValue(dst map[string]any, key string, srcVal, dstVal any) (bool, error) {
+	switch val := srcVal.(type) {
+	case nil:
+		return true, nil
+	case *OptionalBool:
+		if val == nil || !val.IsSet() {
+			return true, nil
+		}
+		dst[key] = cloneOptionalBool(val)
+		return true, nil
+	case OptionalBool:
+		if !val.IsSet() {
+			return true, nil
+		}
+		dst[key] = val
+		return true, nil
+	case bool:
+		if isOptionalBoolValue(dstVal) {
+			if _, isValue := dstVal.(OptionalBool); isValue {
+				ob := OptionalBool{}
+				ob.Set(val)
+				dst[key] = ob
+			} else {
+				dst[key] = NewOptionalBool(val)
+			}
+			return true, nil
+		}
+		return false, nil
+	case string:
+		if !isOptionalBoolValue(dstVal) {
+			return false, nil
+		}
+		trimmed := strings.TrimSpace(val)
+		if trimmed == "" || strings.EqualFold(trimmed, "null") {
+			return true, nil
+		}
+		parsed, err := parseBoolString(trimmed)
+		if err != nil {
+			return false, nil
+		}
+		dst[key] = NewOptionalBool(parsed)
+		return true, nil
+	case map[string]any:
+		ob := &OptionalBool{}
+		handled, err := mergeOptionalBoolFromMap(ob, val)
+		if err != nil {
+			return true, err
+		}
+		if !handled {
+			return false, nil
+		}
+		if !ob.IsSet() {
+			return true, nil
+		}
+		dst[key] = ob
+		return true, nil
+	default:
+		if _, ok := dstVal.(*OptionalBool); ok {
+			return true, nil
+		}
+		if _, ok := dstVal.(OptionalBool); ok {
+			return true, nil
+		}
+		return false, nil
+	}
+}
+
+func mergeOptionalBoolFromMap(dst *OptionalBool, payload map[string]any) (bool, error) {
+	if dst == nil {
+		return false, nil
+	}
+
+	var handled bool
+
+	if setRaw, ok := payload["set"]; ok {
+		handled = true
+		if setBool, ok := setRaw.(bool); ok && !setBool {
+			dst.Unset()
+			return true, nil
+		}
+	}
+
+	if valRaw, ok := payload["value"]; ok {
+		handled = true
+		switch v := valRaw.(type) {
+		case bool:
+			dst.Set(v)
+			return true, nil
+		case string:
+			trimmed := strings.TrimSpace(v)
+			if trimmed == "" || strings.EqualFold(trimmed, "null") {
+				dst.Unset()
+				return true, nil
+			}
+			parsed, err := parseBoolString(trimmed)
+			if err != nil {
+				return true, err
+			}
+			dst.Set(parsed)
+			return true, nil
+		case *OptionalBool:
+			if v != nil && v.IsSet() {
+				dst.Set(v.Value())
+			} else {
+				dst.Unset()
+			}
+			return true, nil
+		case OptionalBool:
+			if v.IsSet() {
+				dst.Set(v.Value())
+			} else {
+				dst.Unset()
+			}
+			return true, nil
+		}
+	}
+
+	return handled, nil
+}
+
+func isOptionalBoolValue(val any) bool {
+	switch val.(type) {
+	case *OptionalBool, OptionalBool:
+		return true
+	default:
+		return false
 	}
 }
