@@ -2,112 +2,143 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/mitchellh/copystructure"
 )
 
-// OptionalBool represents a tri-state boolean value that can be set, unset, or have a value.
-// The zero value represents an unset state, allowing proper precedence handling in configuration merging.
-// This type enables distinguishing between explicitly set false values and unset values,
-// which is crucial for proper boolean precedence across configuration providers.
+func init() {
+	copystructure.Copiers[reflect.TypeOf(OptionalBool{})] = func(v any) (any, error) {
+		ob := v.(OptionalBool)
+		clone := OptionalBool{}
+		if ob.IsSet() {
+			clone.Set(ob.Value())
+		}
+		return clone, nil
+	}
+	copystructure.Copiers[reflect.TypeOf(&OptionalBool{})] = func(v any) (any, error) {
+		if v == nil {
+			return (*OptionalBool)(nil), nil
+		}
+		ob := v.(*OptionalBool)
+		clone := &OptionalBool{}
+		if ob != nil && ob.IsSet() {
+			clone.Set(ob.Value())
+		}
+		return clone, nil
+	}
+}
+
+// OptionalBool carries three states: unset, explicitly true, explicitly false.
+// The zero value is intentionally unset so callers can detect omission across provider merges.
 type OptionalBool struct {
-	value *bool
+	set   bool
+	value bool
 }
 
-// Set sets the OptionalBool to the given boolean value.
-func (ob *OptionalBool) Set(value bool) {
-	ob.value = &value
+// Set updates the value and marks the option as present.
+func (ob *OptionalBool) Set(v bool) {
+	if ob == nil {
+		return
+	}
+	ob.value = v
+	ob.set = true
 }
 
-// Unset clears the OptionalBool, making it unset.
+// Unset clears the value so callers can detect omission again.
 func (ob *OptionalBool) Unset() {
-	ob.value = nil
+	if ob == nil {
+		return
+	}
+	ob.value = false
+	ob.set = false
 }
 
-// IsSet returns true if the OptionalBool has been explicitly set to a value.
+// IsSet reports whether the field was supplied by any provider.
 func (ob *OptionalBool) IsSet() bool {
-	return ob.value != nil
-}
-
-// Value returns the boolean value if set, or false if unset.
-func (ob *OptionalBool) Value() bool {
-	if ob.value == nil {
+	if ob == nil {
 		return false
 	}
-	return *ob.value
+	return ob.set
 }
 
-// BoolOr returns the boolean value if set, or the provided default if unset.
-func (ob *OptionalBool) BoolOr(defaultValue bool) bool {
-	if ob.value == nil {
-		return defaultValue
+// BoolOr returns the stored value when set, otherwise the supplied default.
+func (ob *OptionalBool) BoolOr(def bool) bool {
+	if ob == nil {
+		return def
 	}
-	return *ob.value
+	if ob.set {
+		return ob.value
+	}
+	return def
 }
 
-// String returns a string representation of the OptionalBool.
+// Value returns the stored value. When unset it returns false.
+func (ob *OptionalBool) Value() bool {
+	if ob == nil {
+		return false
+	}
+	return ob.value
+}
+
+// ValueOK returns the stored value along with the IsSet flag.
+func (ob *OptionalBool) ValueOK() (bool, bool) {
+	if ob == nil {
+		return false, false
+	}
+	return ob.value, ob.set
+}
+
+// String returns a human readable representation for debugging.
 func (ob *OptionalBool) String() string {
-	if ob.value == nil {
+	if ob == nil {
+		return "<nil>"
+	}
+	if !ob.set {
 		return "<unset>"
 	}
-	return strconv.FormatBool(*ob.value)
+	return strconv.FormatBool(ob.value)
 }
 
-// MarshalJSON implements json.Marshaler interface.
-// Unset values are marshaled as null.
+// MarshalJSON satisfies json.Marshaler so file providers round-trip correctly.
 func (ob *OptionalBool) MarshalJSON() ([]byte, error) {
-	if ob.value == nil {
+	if ob == nil || !ob.set {
 		return []byte("null"), nil
 	}
-	return json.Marshal(*ob.value)
+	return json.Marshal(ob.value)
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface.
-// Accepts boolean values, null (for unset), and string representations of booleans.
+// UnmarshalJSON satisfies json.Unmarshaler so file providers can populate OptionalBool.
 func (ob *OptionalBool) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
+	if ob == nil {
+		return fmt.Errorf("optional bool: nil receiver")
+	}
+
+	trimmed := strings.TrimSpace(string(data))
+	if strings.EqualFold(trimmed, "null") || trimmed == "" {
 		ob.Unset()
 		return nil
 	}
 
-	var value bool
-	if err := json.Unmarshal(data, &value); err != nil {
-		// Try to parse as string
-		var str string
-		if err := json.Unmarshal(data, &str); err != nil {
-			return err
-		}
-		parsed, err := parseBoolString(str)
-		if err != nil {
-			return err
-		}
-		ob.Set(parsed)
+	var direct bool
+	if err := json.Unmarshal(data, &direct); err == nil {
+		ob.Set(direct)
 		return nil
 	}
 
-	ob.Set(value)
-	return nil
-}
-
-// MarshalText implements encoding.TextMarshaler interface.
-// Unset values are marshaled as empty string.
-func (ob *OptionalBool) MarshalText() ([]byte, error) {
-	if ob.value == nil {
-		return []byte(""), nil
+	var asString string
+	if err := json.Unmarshal(data, &asString); err != nil {
+		return fmt.Errorf("optional bool: unsupported json payload %q", data)
 	}
-	return []byte(strconv.FormatBool(*ob.value)), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler interface.
-// Accepts boolean string representations, with empty string meaning unset.
-func (ob *OptionalBool) UnmarshalText(data []byte) error {
-	text := string(data)
-	if text == "" {
+	asString = strings.TrimSpace(asString)
+	if asString == "" || strings.EqualFold(asString, "null") {
 		ob.Unset()
 		return nil
 	}
-
-	parsed, err := parseBoolString(text)
+	parsed, err := parseBoolString(asString)
 	if err != nil {
 		return err
 	}
@@ -115,30 +146,65 @@ func (ob *OptionalBool) UnmarshalText(data []byte) error {
 	return nil
 }
 
-// parseBoolString parses various string representations of booleans.
-// Supports standard strconv.ParseBool plus common aliases.
-func parseBoolString(s string) (bool, error) {
-	s = strings.ToLower(strings.TrimSpace(s))
-
-	// Handle empty string as unset - but this should be handled by caller
-	if s == "" {
-		return false, nil
+// MarshalText satisfies encoding.TextMarshaler so env/flag providers can serialize values.
+func (ob *OptionalBool) MarshalText() ([]byte, error) {
+	if ob == nil || !ob.set {
+		return []byte(""), nil
 	}
-
-	// Use standard library parsing which handles:
-	// "1", "t", "T", "TRUE", "true", "True"  -> true
-	// "0", "f", "F", "FALSE", "false", "False" -> false
-	return strconv.ParseBool(s)
+	return []byte(strconv.FormatBool(ob.value)), nil
 }
 
-// NewOptionalBool creates a new OptionalBool with the given value.
+// UnmarshalText satisfies encoding.TextUnmarshaler so env/flag providers can populate values.
+func (ob *OptionalBool) UnmarshalText(text []byte) error {
+	if ob == nil {
+		return fmt.Errorf("optional bool: nil receiver")
+	}
+	trimmed := strings.TrimSpace(string(text))
+	if trimmed == "" || strings.EqualFold(trimmed, "null") {
+		ob.Unset()
+		return nil
+	}
+	parsed, err := parseBoolString(trimmed)
+	if err != nil {
+		return err
+	}
+	ob.Set(parsed)
+	return nil
+}
+
+// parseBoolString parses canonical and common boolean aliases.
+func parseBoolString(s string) (bool, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	switch s {
+	case "1", "t", "true", "y", "yes", "on":
+		return true, nil
+	case "0", "f", "false", "n", "no", "off":
+		return false, nil
+	default:
+		return strconv.ParseBool(s)
+	}
+}
+
+// NewOptionalBool constructs an OptionalBool that is explicitly set.
 func NewOptionalBool(value bool) *OptionalBool {
 	ob := &OptionalBool{}
 	ob.Set(value)
 	return ob
 }
 
-// NewOptionalBoolUnset creates a new unset OptionalBool.
+// NewOptionalBoolUnset constructs an OptionalBool that starts unset.
 func NewOptionalBoolUnset() *OptionalBool {
 	return &OptionalBool{}
+}
+
+// cloneOptionalBool makes a copy preserving set semantics. It tolerates nil input.
+func cloneOptionalBool(ob *OptionalBool) *OptionalBool {
+	if ob == nil {
+		return nil
+	}
+	clone := &OptionalBool{}
+	if ob.set {
+		clone.Set(ob.value)
+	}
+	return clone
 }
