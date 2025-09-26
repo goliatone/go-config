@@ -247,32 +247,183 @@ func LoadConfig(path string) (*Config, error) {
 }
 ```
 
-### Handling Boolean Fields and Defaults
+### Boolean Precedence and OptionalBool
 
-Boolean fields require special consideration when applying defaults:
+This library provides enhanced boolean handling through the `OptionalBool` type to address the common problem where boolean precedence fails once any provider sets a value to `true`.
+
+#### The Boolean Precedence Problem
+
+With regular `bool` fields, the standard precedence chain (defaults→struct→file→env→flags) breaks down:
 
 ```go
 type Config struct {
-    Features struct {
-        EnableCache   bool `yaml:"enable_cache"`
-        EnableMetrics bool `yaml:"enable_metrics"`
-    } `yaml:"features"`
+    EnableFeature bool `yaml:"enable_feature"`
 }
 
-func applyDefaults(cfg *Config) {
-    // Problem: Can't distinguish between "not set" and "explicitly false"
-    // Solution 1: Check if all booleans in a group are false
-    if !cfg.Features.EnableCache && !cfg.Features.EnableMetrics {
-        // Likely not set, apply defaults
-        cfg.Features.EnableCache = true
-        cfg.Features.EnableMetrics = true
-    }
+// If defaults set EnableFeature = true, environment variables
+// cannot override it to false due to merge logic limitations
+```
 
-    // Solution 2: Use pointers for optional booleans
-    type ConfigWithPointers struct {
-        EnableFeature *bool `yaml:"enable_feature"`
+#### OptionalBool Solution
+
+The `OptionalBool` type maintains metadata about whether a value was explicitly set:
+
+```go
+import "github.com/goliatone/go-config/config"
+
+type Config struct {
+    // Use OptionalBool for fields that need proper precedence
+    EnableFeature config.OptionalBool `yaml:"enable_feature" json:"enable_feature"`
+
+    // Regular bool for fields that don't need precedence control
+    InternalFlag bool `yaml:"internal_flag" json:"internal_flag"`
+}
+
+func (c *Config) setupDefaults() {
+    // Set default that can be properly overridden
+    c.EnableFeature = config.OptionalBool{}.Set(true)
+}
+```
+
+#### When to Use OptionalBool vs bool
+
+**Use OptionalBool when:**
+- The field needs to respect full provider precedence (defaults can be overridden by any provider)
+- You need to distinguish between "not set" and "explicitly false"
+- The field is likely to be configured via multiple sources (file, env, flags)
+
+**Use regular bool when:**
+- The field is internal or computed (not loaded from config)
+- Simple true/false without precedence concerns
+- Performance is critical (OptionalBool has minimal but measurable overhead)
+
+#### Migration Guide
+
+To convert existing boolean fields to OptionalBool:
+
+1. **Update struct definition:**
+```go
+// Before
+type Config struct {
+    EnableCache bool `yaml:"enable_cache"`
+}
+
+// After
+type Config struct {
+    EnableCache config.OptionalBool `yaml:"enable_cache"`
+}
+```
+
+2. **Update default value assignment:**
+```go
+// Before
+cfg.EnableCache = true
+
+// After
+cfg.EnableCache = config.OptionalBool{}.Set(true)
+```
+
+3. **Update value access:**
+```go
+// Before
+if cfg.EnableCache {
+    // use feature
+}
+
+// After
+if cfg.EnableCache.BoolOr(false) {
+    // use feature
+}
+```
+
+4. **Test the migration:**
+```go
+func TestBooleanPrecedence(t *testing.T) {
+    cfg := &Config{}
+
+    // Test that environment can override defaults
+    os.Setenv("APP_ENABLE_CACHE", "false")
+    defer os.Unsetenv("APP_ENABLE_CACHE")
+
+    container := config.New(cfg).
+        WithProvider(
+            config.DefaultValuesProvider(map[string]any{
+                "enable_cache": true, // default is true
+            }),
+            config.EnvProvider[*Config]("APP_", "_"),
+        )
+
+    err := container.Load(context.Background())
+    assert.NoError(t, err)
+
+    // Should be false due to env override
+    assert.False(t, cfg.EnableCache.BoolOr(true))
+}
+```
+
+#### Troubleshooting Boolean Issues
+
+**Problem**: Environment variables not overriding file/default boolean values
+
+**Solution**: Convert the boolean field to `OptionalBool` type. Regular `bool` fields cannot distinguish between "not set" and "explicitly false", breaking precedence.
+
+**Problem**: OptionalBool field not parsing from JSON/YAML
+
+**Solution**: Ensure your struct has proper file format tags:
+```go
+type Config struct {
+    // Correct - includes both yaml and json tags
+    Feature config.OptionalBool `yaml:"feature" json:"feature"`
+}
+```
+
+**Problem**: Getting zero values instead of defaults with OptionalBool
+
+**Solution**: Use `BoolOr()` method with appropriate fallback:
+```go
+// Wrong - returns false if not explicitly set
+enabled := cfg.Feature.Value()
+
+// Correct - returns true if not set, actual value if set
+enabled := cfg.Feature.BoolOr(true)
+```
+
+**Problem**: Performance concerns with OptionalBool
+
+**Solution**: OptionalBool has minimal overhead. If performance is critical, profile first:
+```go
+// Benchmark test
+func BenchmarkOptionalBool(b *testing.B) {
+    opt := config.OptionalBool{}.Set(true)
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _ = opt.BoolOr(false)
     }
 }
+```
+
+#### Working with OptionalBool
+
+```go
+// Creating OptionalBool values
+unset := config.OptionalBool{}                    // unset state
+setTrue := config.OptionalBool{}.Set(true)        // explicitly true
+setFalse := config.OptionalBool{}.Set(false)      // explicitly false
+
+// Checking states
+if opt.IsSet() {
+    value := opt.Value() // Get actual bool value
+} else {
+    // Use default behavior
+}
+
+// Getting values with fallbacks
+enabled := opt.BoolOr(true)  // true if unset, actual value if set
+disabled := opt.BoolOr(false) // false if unset, actual value if set
+
+// JSON/YAML marshaling works automatically
+data, _ := json.Marshal(config{Feature: setTrue})
+// Output: {"feature": true}
 ```
 
 ## Solvers
