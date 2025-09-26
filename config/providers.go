@@ -82,6 +82,61 @@ var (
 	DefaultEnvDelimiter = "__" // so we can have composed_words
 )
 
+// containsOptionalBool checks if a map contains any OptionalBool values
+func containsOptionalBool(data map[string]any) bool {
+	for _, v := range data {
+		switch v.(type) {
+		case *OptionalBool, OptionalBool:
+			return true
+		case map[string]any:
+			if containsOptionalBool(v.(map[string]any)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// optionalBoolAwareProvider preserves OptionalBool types during koanf loading
+type optionalBoolAwareProvider struct {
+	data  map[string]any
+	delim string
+}
+
+func (p *optionalBoolAwareProvider) Read() (map[string]any, error) {
+	// Simply flatten the map while preserving OptionalBool types
+	result := make(map[string]any)
+	flattenMapWithOptionalBool("", p.data, p.delim, result)
+	return result, nil
+}
+
+func (p *optionalBoolAwareProvider) ReadBytes() ([]byte, error) {
+	// Not needed for our use case since we implement Read()
+	return nil, nil
+}
+
+// flattenMapWithOptionalBool flattens nested maps while preserving OptionalBool types
+func flattenMapWithOptionalBool(prefix string, data map[string]any, delim string, result map[string]any) {
+	for k, v := range data {
+		key := k
+		if prefix != "" {
+			key = prefix + delim + k
+		}
+
+		switch val := v.(type) {
+		case map[string]any:
+			// Recursively flatten nested maps
+			flattenMapWithOptionalBool(key, val, delim, result)
+		case *OptionalBool, OptionalBool:
+			// Store OptionalBool as-is
+			result[key] = val
+		default:
+			// All other types are stored as-is
+			result[key] = val
+		}
+	}
+}
+
 func (s ProviderType) String() string {
 	return string(s)
 }
@@ -108,7 +163,18 @@ func (p ProviderType) validate() error {
 
 func DefaultValuesProvider[C Validable](def map[string]any, order ...int) ProviderBuilder[C] {
 	return func(c *Container[C]) (Provider, error) {
-		kprovider := confmap.Provider(def, ".")
+		// use OptionalBool aware provider if any values are OptionalBool
+		hasOptionalBool := containsOptionalBool(def)
+		var kprovider interface {
+			Read() (map[string]any, error)
+			ReadBytes() ([]byte, error)
+		}
+
+		if hasOptionalBool {
+			kprovider = &optionalBoolAwareProvider{data: def, delim: "."}
+		} else {
+			kprovider = confmap.Provider(def, ".")
+		}
 
 		prv := &Loader{
 			providerType: ProviderTypeDefault,
