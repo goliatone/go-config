@@ -1,5 +1,32 @@
 # Changelog
 
+# [0.6.0](https://github.com/goliatone/go-config/compare/v0.5.0...v0.6.0) - (2025-11-17)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.6.0 ([447adf7](https://github.com/goliatone/go-config/commit/447adf7a79d89aa0720a60089a16dfffdad38eb7))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Register optional type ([9ec2290](https://github.com/goliatone/go-config/commit/9ec2290808839cc8ba2f44559997aa881fe5fa64))  - (goliatone)
+- Config manager use cfgx ([11e0427](https://github.com/goliatone/go-config/commit/11e042780f0c10fc376576809ebf57d26c600621))  - (goliatone)
+- Config builder pattern ([9e57a9e](https://github.com/goliatone/go-config/commit/9e57a9e439022dfdd38a1abf6e825080db18b120))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.5.0 ([034a1f7](https://github.com/goliatone/go-config/commit/034a1f736fe5dc4cb38982e4d74caf98f8fff9f1))  - (goliatone)
+
+## <!-- 30 -->📝 Other
+
+- PR [#5](https://github.com/goliatone/go-config/pull/5): cfgx ([7417582](https://github.com/goliatone/go-config/commit/7417582ac49799fd4d267041a6984a5d29b33b97))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([e82a615](https://github.com/goliatone/go-config/commit/e82a6159203b32c7ba56e6e2577a697827676bf1))  - (goliatone)
+- Update deps ([161a723](https://github.com/goliatone/go-config/commit/161a723b55257c55b5a93a0079a88840a0f059d3))  - (goliatone)
+- Update examples ([e448903](https://github.com/goliatone/go-config/commit/e448903cf2e623210d9566ea5287daff623cd1ef))  - (goliatone)
+- Update tests ([b2830f2](https://github.com/goliatone/go-config/commit/b2830f29489aea06e2b3eb99602acfe40975159a))  - (goliatone)
+
 # [0.5.0](https://github.com/goliatone/go-config/compare/v0.4.0...v0.5.0) - (2025-09-26)
 
 ## <!-- 1 -->🐛 Bug Fixes
