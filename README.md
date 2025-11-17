@@ -12,6 +12,25 @@ go get github.com/goliatone/go-config
 
 **Note**: This project requires Go 1.18+ for generics support.
 
+## cfgx Builder
+
+`cfgx` is the “bring-your-own-container” half of this repo. It’s a small helper that takes whatever input you have (maps, structs, structs of functions), runs a predictable pipeline (defaults → preprocessors → decode hooks → validation), and hands you back a typed config struct. No koanf dependency, no global state.
+
+- **What it does**: `cfgx.Build[T]` clones any defaults you pass in, executes preprocessors like “evaluate function fields” or “merge these overrides”, runs mapstructure with the shared decode hooks (OptionalBool, duration strings, text unmarshaler), then calls your validator.
+- **Why you’d use it**: When a package (redis-cache, queue client, etc.) wants to accept loose config from callers without embedding the entire go-config container. It keeps decode semantics consistent (same hooks, same validation flow) and avoids re-implementing mapstructure setup in every package.
+- **How to use it**: Call `cfgx.Build` with your input plus options. Example:
+
+```go
+cfg, err := cfgx.Build[Config](input,
+    cfgx.WithDefaults(Defaults()),
+    cfgx.WithPreprocessEvalFuncs[Config](),
+    cfgx.WithMerge[Config](map[string]any{"timeout": "2s"}),
+    cfgx.WithValidator((*Config).Validate),
+)
+```
+
+See [`CFGX.md`](CFGX.md) for the full option catalog and [`examples/cfgx/basic`](examples/cfgx/basic) for a runnable sample.
+
 ## Configuration Container
 
 The configuration container is a flexible package for Go that loads configuration values from multiple sources (files, environment variables, command line flags, and in-code structs). It supports merging, validation, and variable substitution through configurable solvers.
