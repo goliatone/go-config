@@ -12,6 +12,25 @@ go get github.com/goliatone/go-config
 
 **Note**: This project requires Go 1.18+ for generics support.
 
+## cfgx Builder
+
+`cfgx` is the “bring-your-own-container” half of this repo. It’s a small helper that takes whatever input you have (maps, structs, structs of functions), runs a predictable pipeline (defaults → preprocessors → decode hooks → validation), and hands you back a typed config struct. No koanf dependency, no global state.
+
+- **What it does**: `cfgx.Build[T]` clones any defaults you pass in, executes preprocessors like “evaluate function fields” or “merge these overrides”, runs mapstructure with the shared decode hooks (OptionalBool, duration strings, text unmarshaler), then calls your validator.
+- **Why you’d use it**: When a package (redis-cache, queue client, etc.) wants to accept loose config from callers without embedding the entire go-config container. It keeps decode semantics consistent (same hooks, same validation flow) and avoids re-implementing mapstructure setup in every package.
+- **How to use it**: Call `cfgx.Build` with your input plus options. Example:
+
+```go
+cfg, err := cfgx.Build[Config](input,
+    cfgx.WithDefaults(Defaults()),
+    cfgx.WithPreprocessEvalFuncs[Config](),
+    cfgx.WithMerge[Config](map[string]any{"timeout": "2s"}),
+    cfgx.WithValidator((*Config).Validate),
+)
+```
+
+See [`CFGX.md`](CFGX.md) for the full option catalog and [`examples/cfgx/basic`](examples/cfgx/basic) for a runnable sample.
+
 ## Configuration Container
 
 The configuration container is a flexible package for Go that loads configuration values from multiple sources (files, environment variables, command line flags, and in-code structs). It supports merging, validation, and variable substitution through configurable solvers.
@@ -42,6 +61,10 @@ type Config struct {
 ```
 
 **Important**: The `koanf` tags are used internally for key paths, but you still need `json` and `yaml` tags for proper file parsing.
+
+### Optional Booleans
+
+When you need to distinguish “unset” from “explicitly false”, use [`config.OptionalBool`](OPTIONAL_BOOL.md). It exposes three states and plugs into both the container and `cfgx` via the shared decode hook, so precedence across defaults, files, env, and flags remains predictable.
 
 ### Basic Example
 
@@ -90,9 +113,16 @@ func main() {
 	}
 
 	fmt.Printf("App: %s v%s\n", cfg.Name, cfg.Version)
-	fmt.Printf("Database: %s\n", cfg.Database.DSN)
+fmt.Printf("Database: %s\n", cfg.Database.DSN)
 }
 ```
+
+### Debugging Configuration Loading
+
+- **Enable logging**: the default logger prints which provider loaded each key. Swap it via `container.WithLogger` if you want structured output.
+- **Check precedence**: providers execute in registration order; later providers override earlier ones. Make sure your file providers run before env/flag providers if you expect overrides from env.
+- **Verify tags**: missing `koanf`, `json`, or `yaml` tags are the most common reason values stay at zero.
+- **Isolate providers**: run a single provider (or `cfgx.Build`) with known data to confirm decode hooks and validators before chaining multiple sources.
 
 ### Advanced Example with Multiple Sources
 

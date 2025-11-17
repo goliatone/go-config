@@ -3,10 +3,11 @@ package config
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
-	"github.com/go-viper/mapstructure/v2"
+	"github.com/goliatone/go-config/cfgx"
 	"github.com/goliatone/go-config/koanf/solvers"
 	"github.com/goliatone/go-config/logger"
 	"github.com/goliatone/go-errors"
@@ -207,18 +208,12 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		solver.Solve(c.K)
 	}
 
-	// unmarshal configuration into our base struct
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			optionalBoolDecodeHook(),
-			mapstructure.StringToTimeDurationHookFunc(),
-			textUnmarshalerDecodeHook(),
-		),
-		Result:           c.base,
-		WeaklyTypedInput: true,
-	}
-
-	if err := c.K.UnmarshalWithConf("", c.base, koanf.UnmarshalConf{DecoderConfig: decoderConfig}); err != nil {
+	// unmarshal configuration into our base struct via cfgx
+	decoded, err := cfgx.Build[C](c.K.Raw(),
+		cfgx.WithDefaults(c.base),
+		cfgx.WithTagName[C]("koanf"),
+	)
+	if err != nil {
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
 			WithMetadata(map[string]any{
@@ -226,6 +221,7 @@ func (c *Container[C]) Load(ctx context.Context) error {
 				"strict_merge": c.strictMerge,
 			})
 	}
+	c.assignBase(decoded)
 
 	// we can now validate the resulting config object
 	if c.mustValidate {
@@ -239,4 +235,19 @@ func (c *Container[C]) Load(ctx context.Context) error {
 
 func (c *Container[C]) Raw() C {
 	return c.base
+}
+
+func (c *Container[C]) assignBase(value C) {
+	baseVal := reflect.ValueOf(&c.base).Elem()
+	newVal := reflect.ValueOf(value)
+
+	if baseVal.Kind() == reflect.Pointer && newVal.Kind() == reflect.Pointer && baseVal.Type() == newVal.Type() {
+		if baseVal.IsNil() || newVal.IsNil() {
+			baseVal.Set(newVal)
+			return
+		}
+		baseVal.Elem().Set(newVal.Elem())
+		return
+	}
+	baseVal.Set(newVal)
 }

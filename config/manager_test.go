@@ -142,6 +142,24 @@ func TestStructProvider(t *testing.T) {
 	}
 }
 
+func TestContainerPreservesPointerIdentity(t *testing.T) {
+	cfg := &testApp{}
+	loaderFactory := StructProvider[*testApp](testApp{Name: "from-struct"})
+	container := New(cfg).
+		WithConfigPath("").
+		WithProvider(loaderFactory)
+
+	if err := container.Load(context.Background()); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if container.Raw() != cfg {
+		t.Fatalf("expected container to retain original config pointer")
+	}
+	if cfg.Name != "from-struct" {
+		t.Fatalf("expected struct to be populated via cfgx build")
+	}
+}
+
 func TestOptionalProvider(t *testing.T) {
 	dummyErr := errors.New("dummy error")
 	dummyFactory := func(c *Container[testApp]) (Provider, error) {

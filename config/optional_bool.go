@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goliatone/go-config/cfgx"
 	"github.com/mitchellh/copystructure"
 )
 
@@ -30,6 +31,7 @@ func init() {
 		}
 		return clone, nil
 	}
+	cfgx.RegisterOptionalBoolType(NewOptionalBoolUnset())
 }
 
 // OptionalBool carries three states: unset, explicitly true, explicitly false.
