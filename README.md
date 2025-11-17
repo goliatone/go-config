@@ -62,6 +62,10 @@ type Config struct {
 
 **Important**: The `koanf` tags are used internally for key paths, but you still need `json` and `yaml` tags for proper file parsing.
 
+### Optional Booleans
+
+When you need to distinguish “unset” from “explicitly false”, use [`config.OptionalBool`](OPTIONAL_BOOL.md). It exposes three states and plugs into both the container and `cfgx` via the shared decode hook, so precedence across defaults, files, env, and flags remains predictable.
+
 ### Basic Example
 
 ```go
@@ -109,9 +113,16 @@ func main() {
 	}
 
 	fmt.Printf("App: %s v%s\n", cfg.Name, cfg.Version)
-	fmt.Printf("Database: %s\n", cfg.Database.DSN)
+fmt.Printf("Database: %s\n", cfg.Database.DSN)
 }
 ```
+
+### Debugging Configuration Loading
+
+- **Enable logging**: the default logger prints which provider loaded each key. Swap it via `container.WithLogger` if you want structured output.
+- **Check precedence**: providers execute in registration order; later providers override earlier ones. Make sure your file providers run before env/flag providers if you expect overrides from env.
+- **Verify tags**: missing `koanf`, `json`, or `yaml` tags are the most common reason values stay at zero.
+- **Isolate providers**: run a single provider (or `cfgx.Build`) with known data to confirm decode hooks and validators before chaining multiple sources.
 
 ### Advanced Example with Multiple Sources
 
