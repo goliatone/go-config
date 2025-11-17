@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/goliatone/go-config/cfgx"
 )
 
 // Test configuration structs with Validate methods
@@ -54,6 +56,19 @@ type IntegrationJSONTestConfig struct {
 }
 
 func (c *IntegrationJSONTestConfig) Validate() error { return nil }
+
+func TestCfgxBuildOptionalBool(t *testing.T) {
+	cfg := &IntegrationTestConfig{}
+	result, err := cfgx.Build[*IntegrationTestConfig](map[string]any{
+		"log_level": "true",
+	}, cfgx.WithDefaults(cfg), cfgx.WithTagName[*IntegrationTestConfig]("koanf"))
+	if err != nil {
+		t.Fatalf("cfgx build failed: %v", err)
+	}
+	if result.LogLevel == nil || !result.LogLevel.IsSet() || !result.LogLevel.Value() {
+		t.Fatalf("expected log_level to be true, got %+v", result.LogLevel)
+	}
+}
 
 // TestOptionalBoolProviderChain tests the complete provider chain with OptionalBool fields
 // This validates that OptionalBool precedence works correctly across all providers:
