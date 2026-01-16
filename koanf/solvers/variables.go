@@ -38,75 +38,92 @@ func (s variables) Solve(config *koanf.Koanf) *koanf.Koanf {
 
 func (s variables) keypath(key, val string, config *koanf.Koanf) {
 	current := val
+	visited := map[string]struct{}{
+		current: {},
+	}
+	changed := false
 
 	for {
-		start := strings.Index(current, s.delimeters.Start)
-		if start == -1 {
+		next, updated, directValue, setDirect := s.replaceTokens(key, current, config)
+		if !updated {
 			break
 		}
-
-		contentStart := start + len(s.delimeters.Start)
-		endOffset := strings.Index(current[contentStart:], s.delimeters.End)
-		if endOffset == -1 {
-			break
-		}
-
-		contentEnd := contentStart + endOffset
-		path := current[contentStart:contentEnd]
-		if path == "" || path == key {
-			break
-		}
-
-		if !config.Exists(path) {
-			break
-		}
-
-		resolved := config.Get(path)
-		isFullMatch := start == 0 && contentEnd+len(s.delimeters.End) == len(current)
-
-		if isFullMatch {
-			if key == path {
-				break
-			}
-			config.Set(key, resolved)
+		changed = true
+		if setDirect {
+			config.Set(key, directValue)
 			return
 		}
-
-		next := s.replaceValue(current, resolved)
 		if next == current {
 			break
 		}
-
+		if _, seen := visited[next]; seen {
+			break
+		}
+		visited[next] = struct{}{}
 		current = next
 	}
 
-	if current != val {
+	if changed && current != val {
 		config.Set(key, current)
 	}
 }
 
-func (s variables) replaceValue(input string, replacement any) string {
+func (s variables) replaceTokens(key, input string, config *koanf.Koanf) (string, bool, any, bool) {
 	startDelimiter := s.delimeters.Start
 	endDelimiter := s.delimeters.End
+	offset := 0
+	var out strings.Builder
+	out.Grow(len(input))
+	changed := false
 
-	startIndex := strings.Index(input, startDelimiter)
-	if startIndex == -1 {
-		return input
+	for {
+		startIndex := strings.Index(input[offset:], startDelimiter)
+		if startIndex == -1 {
+			out.WriteString(input[offset:])
+			break
+		}
+		startIndex += offset
+
+		contentStart := startIndex + len(startDelimiter)
+		endOffset := strings.Index(input[contentStart:], endDelimiter)
+		if endOffset == -1 {
+			out.WriteString(input[offset:])
+			break
+		}
+
+		contentEnd := contentStart + endOffset
+		tokenEnd := contentEnd + len(endDelimiter)
+		path := input[contentStart:contentEnd]
+
+		out.WriteString(input[offset:startIndex])
+
+		if path == "" || path == key || !config.Exists(path) {
+			out.WriteString(input[startIndex:tokenEnd])
+			offset = tokenEnd
+			continue
+		}
+
+		resolved := config.Get(path)
+		isFullMatch := startIndex == 0 && tokenEnd == len(input)
+		if isFullMatch {
+			if resolvedStr, ok := resolved.(string); ok {
+				if resolvedStr == input {
+					return input, false, nil, false
+				}
+				return resolvedStr, true, nil, false
+			}
+			return input, true, resolved, true
+		}
+
+		out.WriteString(ToString(resolved))
+		changed = true
+		offset = tokenEnd
 	}
 
-	endIndex := strings.Index(input[startIndex:], endDelimiter)
-	if endIndex == -1 {
-		return input
+	next := out.String()
+	if next != input {
+		changed = true
 	}
 
-	endIndex += startIndex
-
-	// Extract parts before and after the delimited substring
-	before := input[:startIndex]
-	after := input[endIndex+len(endDelimiter):]
-
-	// Concatenate the parts with the replacement
-	result := before + ToString(replacement) + after
-
-	return result
+	return next, changed, nil, false
 }
