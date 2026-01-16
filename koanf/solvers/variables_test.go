@@ -181,3 +181,38 @@ func TestKSolver_Variables_embedded(t *testing.T) {
 
 	assert.Equal(t, "http://localhost/api/v0/en", out.Get("server.endpoint"))
 }
+
+func TestKSolver_Variables_nonStringReplacement(t *testing.T) {
+	defaultValues := map[string]any{
+		"count":       5,
+		"flag":        true,
+		"count_value": "${count}",
+		"flag_value":  "${flag}",
+		"message":     "count=${count}, flag=${flag}",
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewVariablesSolver("${", "}")
+	out := solver.Solve(k)
+
+	assert.Equal(t, 5, out.Get("count_value"))
+	assert.Equal(t, true, out.Get("flag_value"))
+	assert.Equal(t, "count=5, flag=true", out.Get("message"))
+}
+
+func TestKSolver_Variables_missingTokenContinues(t *testing.T) {
+	defaultValues := map[string]any{
+		"count": 5,
+		"value": "${missing}-${count}",
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewVariablesSolver("${", "}")
+	out := solver.Solve(k)
+
+	assert.Equal(t, "${missing}-5", out.Get("value"))
+}

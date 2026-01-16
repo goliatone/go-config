@@ -105,3 +105,18 @@ func TestKSolver_URLs_with_fs(t *testing.T) {
 		out.Get("not_matching"),
 	)
 }
+
+func TestKSolver_URLs_embedded_not_replaced(t *testing.T) {
+	rawValue := "prefix @file://testdata/version.txt"
+	defaultValues := map[string]any{
+		"version": rawValue,
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewURISolver("@", "://")
+	out := solver.Solve(k)
+
+	assert.Equal(t, rawValue, out.Get("version"))
+}
