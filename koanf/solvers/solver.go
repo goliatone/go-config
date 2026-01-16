@@ -2,7 +2,6 @@ package solvers
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/knadh/koanf/v2"
 )
@@ -12,7 +11,7 @@ type ConfigSolver interface {
 }
 
 func ToString(v any) string {
-	return fmt.Sprintf("%v", reflect.ValueOf(v))
+	return fmt.Sprint(v)
 }
 
 type delimiters struct {
