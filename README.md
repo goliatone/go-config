@@ -471,7 +471,7 @@ var k = koanf.New(".")
 func main() {
     slvrs := []solvers.ConfigSolver{
         solvers.NewVariablesSolver("${", "}"),
-        solvers.NewURLSolver("@", "://"),
+        solvers.NewURISolver("@", "://"),
     }
 
     if err := k.Load(file.Provider("config/cofig.json"), json.Parser()); err != nil {
