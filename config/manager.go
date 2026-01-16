@@ -229,9 +229,12 @@ func (c *Container[C]) Load(ctx context.Context) error {
 			maxPasses = 1
 		}
 		for pass := 0; pass < maxPasses; pass++ {
-			before := snapshotConfig(c.K)
+			before, ok := snapshotConfig(c.K)
 			for _, solver := range c.solvers {
 				solver.Solve(c.K)
+			}
+			if !ok {
+				continue
 			}
 			after := c.K.Raw()
 			if reflect.DeepEqual(before, after) {
@@ -284,14 +287,14 @@ func (c *Container[C]) assignBase(value C) {
 	baseVal.Set(newVal)
 }
 
-func snapshotConfig(k *koanf.Koanf) any {
+func snapshotConfig(k *koanf.Koanf) (any, bool) {
 	if k == nil {
-		return nil
+		return nil, false
 	}
 	raw := k.Raw()
 	cloned, err := copystructure.Copy(raw)
 	if err != nil {
-		return raw
+		return raw, false
 	}
-	return cloned
+	return cloned, true
 }
