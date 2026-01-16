@@ -2,7 +2,6 @@ package solvers
 
 import (
 	"encoding/base64"
-	"fmt"
 	"io/fs"
 	"os"
 	"strings"
@@ -47,7 +46,7 @@ func (s uris) Solve(config *koanf.Koanf) *koanf.Koanf {
 
 func (s uris) keypath(key, val string, config *koanf.Koanf) {
 	start := strings.Index(val, s.delimeters.Start)
-	if start == -1 {
+	if start != 0 {
 		return
 	}
 
@@ -73,8 +72,6 @@ func (s uris) keypath(key, val string, config *koanf.Koanf) {
 		if content, err := SolveBase64DecodeProtocol(s.fs, uri); err == nil {
 			config.Set(key, content)
 		}
-	default:
-		fmt.Printf("unknown protocol: %s\n", protocol)
 	}
 }
 
