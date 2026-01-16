@@ -483,6 +483,29 @@ func TestMergeWithBooleanPrecedence_OptionalBoolHandling(t *testing.T) {
 	}
 }
 
+func TestMergeWithBooleanPrecedence_MapOverwritesScalar(t *testing.T) {
+	src := map[string]any{
+		"db": map[string]any{
+			"dsn": "postgres://localhost",
+		},
+	}
+	dest := map[string]any{
+		"db": "sqlite.db",
+	}
+
+	if err := MergeWithBooleanPrecedence(src, dest); err != nil {
+		t.Fatalf("MergeWithBooleanPrecedence failed: %v", err)
+	}
+
+	db, ok := dest["db"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected db to be map after merge, got %T", dest["db"])
+	}
+	if db["dsn"] != "postgres://localhost" {
+		t.Fatalf("expected db.dsn to be overwritten, got %v", db["dsn"])
+	}
+}
+
 // TestMergeWithBooleanPrecedence_RecursiveMapHandling tests recursive map merge behavior
 func TestMergeWithBooleanPrecedence_RecursiveMapHandling(t *testing.T) {
 	tests := []struct {
