@@ -198,11 +198,22 @@ container.WithConfigPath("custom/path.json")
 // Add custom logger
 container.WithLogger(myLogger)
 
-// Add variable solvers for substitution
+// Add solvers for substitution and evaluation
 container.WithSolver(
 	solvers.NewVariablesSolver("${", "}"),
 	solvers.NewURISolver("@", "://"),
+	solvers.NewExpressionSolver("{{", "}}"),
 )
+
+// Replace solver order explicitly
+container.WithSolvers(
+	solvers.NewVariablesSolver("${", "}"),
+	solvers.NewURISolver("@", "://"),
+	solvers.NewExpressionSolver("{{", "}}"),
+)
+
+// Allow capped recursive passes
+container.WithSolverPasses(2)
 ```
 
 ### Loading Methods
@@ -462,7 +473,7 @@ The solvers package provides variable post-processing for [koanf](https://github
 
 ```go
 import (
-    "github.com/goliatone/go-config/solvers"
+    "github.com/goliatone/go-config/koanf/solvers"
     "github.com/knadh/koanf/v2"
 )
 
@@ -472,6 +483,7 @@ func main() {
     slvrs := []solvers.ConfigSolver{
         solvers.NewVariablesSolver("${", "}"),
         solvers.NewURISolver("@", "://"),
+        solvers.NewExpressionSolver("{{", "}}"),
     }
 
     if err := k.Load(file.Provider("config/cofig.json"), json.Parser()); err != nil {
@@ -583,6 +595,49 @@ Will replace the reference with the decoded value of the variable:
 {
     "password": "#pw12;Radd$a.243"
 }
+```
+
+### Expression Solver
+
+Expressions are evaluated only when the entire value is wrapped by delimiters
+(default `{{` `}}`). The evaluator uses the `config.Raw()` snapshot, so nested
+keys like `app.env` are available.
+
+```json
+{
+    "app": {
+        "env": "development"
+    },
+    "debug_toolbar": "{{ app.env == \"development\" }}"
+}
+```
+
+You can set custom delimiters or an error handler:
+
+```go
+exprSolver := solvers.NewExpressionSolverWithEvaluator(
+	"{{",
+	"}}",
+	nil,
+	solvers.OnEvalLeaveUnchanged(),
+)
+container.WithSolver(exprSolver)
+```
+
+### Solver Ordering and Passes
+
+The default solver order is variables → URI → expression, with one pass. Use
+`WithSolvers` to replace ordering and `WithSolverPasses` to enable capped
+recursive passes for nested resolution.
+
+```go
+container := config.New(cfg).
+	WithSolvers(
+		solvers.NewVariablesSolver("${", "}"),
+		solvers.NewURISolver("@", "://"),
+		solvers.NewExpressionSolver("{{", "}}"),
+	).
+	WithSolverPasses(2)
 ```
 
 ## Providers
