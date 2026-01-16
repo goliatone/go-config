@@ -12,6 +12,7 @@ import (
 	"github.com/goliatone/go-config/logger"
 	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/v2"
+	"github.com/mitchellh/copystructure"
 )
 
 var (
@@ -34,6 +35,7 @@ type Container[C Validable] struct {
 	delimiter    string
 	configPath   string
 	solvers      []solvers.ConfigSolver
+	solverPasses int
 	logger       logger.Logger
 
 	loaders []ProviderBuilder[C]
@@ -64,6 +66,21 @@ func (c *Container[C]) WithSolver(slvrs ...solvers.ConfigSolver) *Container[C] {
 	return c
 }
 
+// WithSolvers replaces the solver list, allowing explicit ordering.
+func (c *Container[C]) WithSolvers(slvrs ...solvers.ConfigSolver) *Container[C] {
+	c.solvers = append([]solvers.ConfigSolver{}, slvrs...)
+	return c
+}
+
+// WithSolverPasses sets the maximum number of solver passes (minimum 1).
+func (c *Container[C]) WithSolverPasses(passes int) *Container[C] {
+	if passes < 1 {
+		passes = 1
+	}
+	c.solverPasses = passes
+	return c
+}
+
 func (c *Container[C]) WithLogger(l logger.Logger) *Container[C] {
 	c.logger = l
 	return c
@@ -88,9 +105,11 @@ func New[C Validable](c C) *Container[C] {
 		loadTimeout:  DefaultLoadTimeout,
 		configPath:   DefaultConfigFilepath,
 		logger:       logger.NewDefaultLogger("config"),
+		solverPasses: 1,
 		solvers: []solvers.ConfigSolver{
 			solvers.NewVariablesSolver("${", "}"),
 			solvers.NewURISolver("@", "://"),
+			solvers.NewExpressionSolver("{{", "}}"),
 		},
 	}
 
@@ -204,8 +223,21 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 
 	// run all solvers
-	for _, solver := range c.solvers {
-		solver.Solve(c.K)
+	if len(c.solvers) > 0 {
+		maxPasses := c.solverPasses
+		if maxPasses < 1 {
+			maxPasses = 1
+		}
+		for pass := 0; pass < maxPasses; pass++ {
+			before := snapshotConfig(c.K)
+			for _, solver := range c.solvers {
+				solver.Solve(c.K)
+			}
+			after := c.K.Raw()
+			if reflect.DeepEqual(before, after) {
+				break
+			}
+		}
 	}
 
 	// unmarshal configuration into our base struct via cfgx
@@ -250,4 +282,16 @@ func (c *Container[C]) assignBase(value C) {
 		return
 	}
 	baseVal.Set(newVal)
+}
+
+func snapshotConfig(k *koanf.Koanf) any {
+	if k == nil {
+		return nil
+	}
+	raw := k.Raw()
+	cloned, err := copystructure.Copy(raw)
+	if err != nil {
+		return raw
+	}
+	return cloned
 }
