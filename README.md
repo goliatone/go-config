@@ -29,7 +29,11 @@ cfg, err := cfgx.Build[Config](input,
 )
 ```
 
-See [`CFGX.md`](CFGX.md) for the full option catalog and [`examples/cfgx/basic`](examples/cfgx/basic) for a runnable sample.
+See `cfgx/doc.go` for the option catalog and `examples/cfgx/basic` for a runnable sample. Quick map of the cfgx surface:
+- Defaults: `WithDefaults`, `WithDefaultFunc`
+- Preprocess: `WithPreprocess`, `WithPreprocessFunc`, `WithPreprocessEvalFuncs`, `WithMerge`, `WithoutDefaultHooks`, `WithDefaultHooks`
+- Decoder: `WithDecoder`, `WithDecoderConfig`, `WithDecodeHooks`, `WithStrictKeys`, `WithWeakTyping`, `WithTagName`
+- Validation: `WithValidator`, `WithValidatorFunc`
 
 ## Configuration Container
 
@@ -40,7 +44,8 @@ The configuration container is a flexible package for Go that loads configuratio
 - **Validation**: Each configuration struct can implement a `Validate()` method to enforce required rules.
 - **Flexible Merging**: Loaders are applied in a defined order so that later sources override earlier values.
 - **Optional Loaders**: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
-- **Variable Substitution**: Built in support for variable substitution (e.g. env vars) and URI solving.
+- **Variable Substitution**: Built in support for variable substitution (e.g. env vars), URI solving, and full-match expression evaluation.
+- **Solver Control**: Override solver order and enable capped recursive passes when values depend on one another.
 - **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
 ### Struct Tag Configuration for File Parsing
@@ -113,7 +118,7 @@ func main() {
 	}
 
 	fmt.Printf("App: %s v%s\n", cfg.Name, cfg.Version)
-fmt.Printf("Database: %s\n", cfg.Database.DSN)
+	fmt.Printf("Database: %s\n", cfg.Database.DSN)
 }
 ```
 
@@ -192,11 +197,22 @@ func main() {
 // Disable validation
 container.WithValidation(false)
 
+// Strict merge (enabled by default)
+container.WithStrictMerge()
+
 // Custom config file path
 container.WithConfigPath("custom/path.json")
 
+// Set load timeout
+container.WithTimeout(10 * time.Second)
+
 // Add custom logger
 container.WithLogger(myLogger)
+
+// Supply providers explicitly
+container.WithProvider(
+	config.DefaultValuesProvider(map[string]any{"name": "MyApp"}),
+)
 
 // Add solvers for substitution and evaluation
 container.WithSolver(
@@ -216,6 +232,12 @@ container.WithSolvers(
 container.WithSolverPasses(2)
 ```
 
+Defaults:
+- delimiter `.` for koanf key paths
+- config path `config/app.json` when no providers are specified
+- load timeout 30s
+- solver order: variables → URI → expression
+
 ### Loading Methods
 
 The library provides multiple loading methods:
@@ -232,6 +254,9 @@ container.MustLoad(context.Background())
 
 // MustLoadWithDefaults - panics on error, uses context.Background()
 container.MustLoadWithDefaults()
+
+// Access the loaded config value
+cfg := container.Raw()
 ```
 
 ### Provider Order
@@ -248,6 +273,7 @@ You can customize the order when creating providers:
 
 ```go
 config.FileProvider[*AppConfig]("config.json", 15) // Custom order
+config.FileProvider[*AppConfig]("config.json", int(config.PriorityConfig.WithOffset(-5)))
 ```
 
 ### FileProvider with Complex Configurations
@@ -322,7 +348,8 @@ type Config struct {
 
 func (c *Config) setupDefaults() {
     // Set default that can be properly overridden
-    c.EnableFeature = config.OptionalBool{}.Set(true)
+    c.EnableFeature = config.OptionalBool{}
+    c.EnableFeature.Set(true)
 }
 ```
 
@@ -361,7 +388,8 @@ type Config struct {
 cfg.EnableCache = true
 
 // After
-cfg.EnableCache = config.OptionalBool{}.Set(true)
+cfg.EnableCache = config.OptionalBool{}
+cfg.EnableCache.Set(true)
 ```
 
 3. **Update value access:**
@@ -435,7 +463,8 @@ enabled := cfg.Feature.BoolOr(true)
 ```go
 // Benchmark test
 func BenchmarkOptionalBool(b *testing.B) {
-    opt := config.OptionalBool{}.Set(true)
+    opt := config.OptionalBool{}
+    opt.Set(true)
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
         _ = opt.BoolOr(false)
@@ -447,11 +476,16 @@ func BenchmarkOptionalBool(b *testing.B) {
 
 ```go
 // Creating OptionalBool values
-unset := config.OptionalBool{}                    // unset state
-setTrue := config.OptionalBool{}.Set(true)        // explicitly true
-setFalse := config.OptionalBool{}.Set(false)      // explicitly false
+unset := config.OptionalBool{} // unset state
+setTrue := config.OptionalBool{}
+setTrue.Set(true) // explicitly true
+setFalse := config.OptionalBool{}
+setFalse.Set(false) // explicitly false
+setTruePtr := config.NewOptionalBool(true)   // pointer helper
+unsetPtr := config.NewOptionalBoolUnset()    // pointer helper
 
 // Checking states
+opt := setTrue
 if opt.IsSet() {
     value := opt.Value() // Get actual bool value
 } else {
@@ -486,7 +520,7 @@ func main() {
         solvers.NewExpressionSolver("{{", "}}"),
     }
 
-    if err := k.Load(file.Provider("config/cofig.json"), json.Parser()); err != nil {
+    if err := k.Load(file.Provider("config/app.json"), json.Parser()); err != nil {
 		log.Fatalf("error loading config: %v", err)
 	}
 
@@ -553,7 +587,7 @@ The `file` solver will let you use a reference to a file and resolve the value o
 
 ```json
 {
-    "version": "@file://verstion.text"
+    "version": "@file://version.txt"
 }
 ```
 
@@ -624,6 +658,10 @@ exprSolver := solvers.NewExpressionSolverWithEvaluator(
 container.WithSolver(exprSolver)
 ```
 
+Built-in handlers include `OnEvalLogAndPanic`, `OnEvalLeaveUnchanged`, and
+`OnEvalRemove`. You can also pass a custom `opts.Evaluator` from
+`github.com/goliatone/go-options` when you need a different evaluation engine.
+
 ### Solver Ordering and Passes
 
 The default solver order is variables → URI → expression, with one pass. Use
@@ -642,6 +680,26 @@ container := config.New(cfg).
 
 ## Providers
 
+### Container Provider Builders
+
+Use these with `container.WithProvider(...)`:
+- `DefaultValuesProvider` (in-memory defaults)
+- `StructProvider` (struct defaults)
+- `FileProvider` (JSON/YAML/TOML, inferred by extension)
+- `EnvProvider` (env override layer)
+- `FlagsProvider` (pflag override layer)
+
+Optional providers can ignore expected errors:
+
+```go
+container.WithProvider(
+	config.OptionalProvider(
+		config.FileProvider[*AppConfig]("config/local.json"),
+		config.DefaultErrorFilter(os.ErrNotExist),
+	),
+)
+```
+
 ### Env
 Enhanced environment variable provider for [koanf](https://github.com/knadh/koanf) that extends the built in functionality with support for arrays and nested structures through environment variables.
 
@@ -656,13 +714,13 @@ Enhanced environment variable provider for [koanf](https://github.com/knadh/koan
 
 ```go
 import (
-    "github.com/goliatone/go-config/env"
+    "github.com/goliatone/go-config/koanf/providers/env"
     "github.com/knadh/koanf/v2"
 )
 
 func main() {
     k := koanf.New(".")
-    provider := Provider("APP_", "__", func(s string) string {
+    provider := env.Provider("APP_", "__", func(s string) string {
         return strings.ToLower(strings.Replace(s, "APP_", "", 1))
     })
     k.Load(provider, nil)
@@ -702,6 +760,10 @@ This produces a JSON structure like this:
     }]
 }
 ```
+
+Use `env.ProviderWithValue` when you need to transform values (for example,
+parse comma-separated lists or numbers), and `(*env.Env).SetLogger` to re-use
+your application logger.
 
 
 ### Debugging Configuration Loading
@@ -848,11 +910,23 @@ func LoadConfig(configPath string) (*AppConfig, error) {
 
 ### Merge
 
-#### IngoringNullValues
+#### IgnoringNullValues
 
 ```go
 k.Load(env.Provider(EnvPrefix, "__", func(s string) string {
     return strings.Replace(strings.ToLower(
         strings.TrimPrefix(s, EnvPrefix)), EnvLevel, ".", -1)
 }), json.Parser(), koanf.WithMergeFunc(config.MergeIgnoringNullValues))
+```
+
+#### OptionalBool-Aware Merge
+
+When you want OptionalBool values to keep precedence across providers,
+use `MergeWithBooleanPrecedence`:
+
+```go
+k.Load(env.Provider(EnvPrefix, "__", func(s string) string {
+	return strings.Replace(strings.ToLower(
+		strings.TrimPrefix(s, EnvPrefix)), EnvLevel, ".", -1)
+}), json.Parser(), koanf.WithMergeFunc(config.MergeWithBooleanPrecedence))
 ```
