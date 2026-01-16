@@ -1,5 +1,34 @@
 # Changelog
 
+# [0.8.0](https://github.com/goliatone/go-config/compare/v0.7.0...v0.8.0) - (2026-01-16)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Do not skip scalar ([056ac9c](https://github.com/goliatone/go-config/commit/056ac9c8aeed7d98106e2b1ff5be3c16659ee950))  - (goliatone)
+- Typo in readme ([f52b9d7](https://github.com/goliatone/go-config/commit/f52b9d7d81d56f5d769f292b30242f84a5cecf65))  - (goliatone)
+- Hardening keypath solver ([19ae6e1](https://github.com/goliatone/go-config/commit/19ae6e1fc0d6769d5413544dd7111a2d44e7380c))  - (goliatone)
+- Index and pathing issues ([14eda4f](https://github.com/goliatone/go-config/commit/14eda4fe37bfc94e1cb201f9d0f2949ebc01dfa4))  - (goliatone)
+- Panic inducing toString ([7fd3f90](https://github.com/goliatone/go-config/commit/7fd3f90b2c6dbfb3f2eb650f8224b6cf2c855ead))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.8.0 ([237f8d0](https://github.com/goliatone/go-config/commit/237f8d0ebbe010388221f5e40ef994b0f627f036))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Konfig solvers wiring ([e1c08df](https://github.com/goliatone/go-config/commit/e1c08dfad2b6438be1dae17c4a4896946f6cacc8))  - (goliatone)
+- Expression solvers ([cbd3d83](https://github.com/goliatone/go-config/commit/cbd3d839fd082dbf27867c60fc4524e7d3c0485a))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.7.0 ([1a25e73](https://github.com/goliatone/go-config/commit/1a25e73ab7ba304d583cf060d4d712f0202a4422))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update tests ([6207ce4](https://github.com/goliatone/go-config/commit/6207ce4ab6b764f5d19cc542afef5e7735d16017))  - (goliatone)
+- Update readme ([02e5af3](https://github.com/goliatone/go-config/commit/02e5af36496ae9c0b89652b058959a77bc330c8a))  - (goliatone)
+- Update depsc ([8b219cc](https://github.com/goliatone/go-config/commit/8b219cca568521362944e9faeef53a6a4dceee45))  - (goliatone)
+
 # [0.7.0](https://github.com/goliatone/go-config/compare/v0.6.0...v0.7.0) - (2025-12-13)
 
 ## <!-- 13 -->📦 Bumps
