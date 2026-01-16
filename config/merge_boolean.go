@@ -29,14 +29,14 @@ func mergeRecursive(src, dst map[string]any) error {
 			continue
 		}
 
-		if shouldOverwriteValue(srcVal, exists) {
+		if shouldOverwriteValue(srcVal, dstVal, exists) {
 			dst[key] = srcVal
 		}
 	}
 	return nil
 }
 
-func shouldOverwriteValue(src any, dstExists bool) bool {
+func shouldOverwriteValue(src any, dstVal any, dstExists bool) bool {
 	if src == nil {
 		return false
 	}
@@ -51,7 +51,8 @@ func shouldOverwriteValue(src any, dstExists bool) bool {
 	case []any:
 		return len(v) > 0
 	case map[string]any:
-		return false
+		_, isMap := dstVal.(map[string]any)
+		return !isMap
 	default:
 		return true
 	}
