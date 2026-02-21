@@ -1,5 +1,34 @@
 # Changelog
 
+# [0.9.0](https://github.com/goliatone/go-config/compare/v0.8.0...v0.9.0) - (2026-02-21)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Default logger formatting ([678dcab](https://github.com/goliatone/go-config/commit/678dcab410f574a9c7b70d574333c3e2119c2009))  - (goliatone)
+- Remove unneded expression ([7c222a6](https://github.com/goliatone/go-config/commit/7c222a6734552be1f527e32a19a7fd0302319f73))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.9.0 ([cd8e56f](https://github.com/goliatone/go-config/commit/cd8e56f4fc4910c5823c29c1bfb5e6518437e3e0))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Implementation of storage URI solver ([69f7cce](https://github.com/goliatone/go-config/commit/69f7cce75e71eeadd84be2a1a87bd9f6a29a0c73))  - (goliatone)
+- Validation implement fail fast ([2833639](https://github.com/goliatone/go-config/commit/2833639b62b0837ad9b7d8d8bcc16d026ccc3bb4))  - (goliatone)
+- Validation report ([4a78cd4](https://github.com/goliatone/go-config/commit/4a78cd49d4c18fbfab2f328a164245084ce33962))  - (goliatone)
+- Normalizer and validator setup ([78c2d76](https://github.com/goliatone/go-config/commit/78c2d76ad0c7376ffe3c298105a6f945a64540ce))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.8.0 ([222a044](https://github.com/goliatone/go-config/commit/222a044b4046413499f6c918e96232353bca4417))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Udpate deps ([04cace4](https://github.com/goliatone/go-config/commit/04cace4e52ad69f3e6e2564bf05d68e84c8791f1))  - (goliatone)
+- Update test ([bfc8e09](https://github.com/goliatone/go-config/commit/bfc8e098adeeee70d26395f2491ea8c8b804cb0c))  - (goliatone)
+- Update deps ([03e8d28](https://github.com/goliatone/go-config/commit/03e8d28210faec9a93d07b30cdced4be174510ab))  - (goliatone)
+- Udpate readme ([58a1348](https://github.com/goliatone/go-config/commit/58a13481a98b149cebbf7c2438d02abff53001da))  - (goliatone)
+
 # [0.8.0](https://github.com/goliatone/go-config/compare/v0.7.0...v0.8.0) - (2026-01-16)
 
 ## <!-- 1 -->🐛 Bug Fixes
