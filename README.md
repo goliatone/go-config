@@ -197,6 +197,36 @@ func main() {
 // Disable validation
 container.WithValidation(false)
 
+// Explicit validation mode (legacy alias: WithValidation)
+container.WithValidationMode(config.ValidationSemantic)
+
+// Disable built-in Validate() call while keeping custom validators
+container.WithBaseValidate(false)
+
+// Configure fail-fast (true) vs aggregate (false) validation reporting
+container.WithFailFast(false)
+
+// Enforce strict decode (unknown keys fail at decode stage)
+container.WithStrictDecode(true)
+
+// Register normalization hooks (run before validators)
+container.WithNormalizer(
+	func(cfg *AppConfig) error {
+		cfg.Name = strings.TrimSpace(cfg.Name)
+		return nil
+	},
+)
+
+// Register custom validators (run before built-in Validate() when enabled)
+container.WithValidator(
+	func(cfg *AppConfig) error {
+		if cfg.Server.Port == 0 {
+			return fmt.Errorf("server port cannot be zero")
+		}
+		return nil
+	},
+)
+
 // Strict merge (enabled by default)
 container.WithStrictMerge()
 
@@ -237,6 +267,10 @@ Defaults:
 - config path `config/app.json` when no providers are specified
 - load timeout 30s
 - solver order: variables → URI → expression
+- validation mode: semantic
+- base validate: enabled
+- fail-fast: enabled
+- strict decode: disabled
 
 ### Loading Methods
 
@@ -257,6 +291,84 @@ container.MustLoadWithDefaults()
 
 // Access the loaded config value
 cfg := container.Raw()
+```
+
+### Validation Pipeline
+
+Container load lifecycle:
+
+1. Providers load and merge values.
+2. Solvers execute (`WithSolverPasses` aware).
+3. Decode runs through `cfgx.Build`.
+4. Normalizers run in registration order.
+5. Validators run in registration order.
+6. Built-in `Validate()` runs when semantic mode and base validate are enabled.
+
+You can now keep normalization and validation inside the container:
+
+```go
+container := config.New(cfg).
+	WithConfigPath("").
+	WithValidationMode(config.ValidationSemantic).
+	WithBaseValidate(true).
+	WithNormalizer(func(c *AppConfig) error {
+		c.Name = strings.TrimSpace(c.Name)
+		return nil
+	}).
+	WithValidator(func(c *AppConfig) error {
+		if c.Server.Port <= 0 {
+			return fmt.Errorf("invalid port")
+		}
+		return nil
+	})
+```
+
+Migration from manual post-load flow:
+
+1. Move `normalize(...)` into `WithNormalizer`.
+2. Keep domain checks in `WithValidator` if they are not part of `Validate()`.
+3. Re-enable semantic validation (`WithValidationMode(config.ValidationSemantic)`), or keep legacy `WithValidation(true)`.
+4. Remove manual post-load `normalize` and `Validate` calls.
+
+### Strict Decode and Unknown Keys
+
+Unknown keys are a decode-stage concern. Enable strict decode with:
+
+```go
+container.WithStrictDecode(true)
+```
+
+When enabled, unknown keys fail decode (`cfgx.ErrDecode` / `cfgx.StageError`), not semantic validation.
+
+### Validation and Decode Error Handling
+
+Use `errors.As` to inspect rich error details:
+
+```go
+if err := container.Load(context.Background()); err != nil {
+	var report *config.ValidationReport
+	if errors.As(err, &report) {
+		for _, issue := range report.Issues {
+			fmt.Printf("[%s] %s\n", issue.Stage, issue.Message)
+		}
+	}
+
+	var stageErr *cfgx.StageError
+	if errors.As(err, &stageErr) {
+		fmt.Printf("decode stage=%s err=%v\n", stageErr.Stage, stageErr.Err)
+	}
+}
+```
+
+Use `errors.Is` for stage classification:
+
+```go
+if errors.Is(err, cfgx.ErrDecode) {
+	// strict decode / mapstructure decode failure
+}
+if errors.Is(err, cfgx.ErrValidate) {
+	// cfgx validator failure (when using cfgx directly)
+}
 ```
 
 ### Provider Order
@@ -808,13 +920,15 @@ Here's a complete example showing best practices for configuration loading:
 package config
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "path/filepath"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
-    "github.com/goliatone/go-config/config"
-    "gopkg.in/yaml.v3"
+	"github.com/goliatone/go-config/config"
+	"gopkg.in/yaml.v3"
 )
 
 type AppConfig struct {
@@ -886,9 +1000,14 @@ func LoadConfig(configPath string) (*AppConfig, error) {
         }
     }
 
-    // Apply environment overrides
+    // Apply environment overrides + in-container normalize/validate
     container := config.New(cfg).
-        WithValidation(false). // Validate manually after loading
+        WithValidationMode(config.ValidationSemantic).
+        WithBaseValidate(true).
+        WithNormalizer(func(c *AppConfig) error {
+            c.Server.Host = strings.TrimSpace(c.Server.Host)
+            return nil
+        }).
         WithProvider(
             config.EnvProvider[*AppConfig]("APP_", "_"),
         )
@@ -897,14 +1016,7 @@ func LoadConfig(configPath string) (*AppConfig, error) {
         return nil, fmt.Errorf("failed to load env overrides: %w", err)
     }
 
-    finalConfig := container.Raw()
-
-    // Validate final configuration
-    if err := finalConfig.Validate(); err != nil {
-        return nil, fmt.Errorf("config validation failed: %w", err)
-    }
-
-    return finalConfig, nil
+    return container.Raw(), nil
 }
 ```
 
