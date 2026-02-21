@@ -291,3 +291,91 @@ func TestKSolver_StorageProtocol_ErrorStrategyRemoveKey(t *testing.T) {
 
 	assert.False(t, out.Exists("password"))
 }
+
+func TestKSolver_IncludeProtocol_FromStorageJSON(t *testing.T) {
+	defaultValues := map[string]any{
+		"remote_object": "@include://storage://mock://tenant/config#objects/latest.json",
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	store := &mockStorager{
+		contentPath: map[string]string{
+			"objects/latest.json": "{\"version\":\"1.2.3\",\"channel\":\"stable\"}\n",
+		},
+	}
+
+	solver := NewURISolver("@", "://")
+	solverImpl := solver.(*uris)
+	solverImpl.newStorager = func(_ string) (storageReader, error) {
+		return store, nil
+	}
+	out := solver.Solve(k)
+
+	assert.Equal(t, "1.2.3", out.Get("remote_object.version"))
+	assert.Equal(t, "stable", out.Get("remote_object.channel"))
+	assert.Equal(t, 1, store.reads)
+}
+
+func TestKSolver_IncludeProtocol_CachesParsedInclude(t *testing.T) {
+	defaultValues := map[string]any{
+		"obj1": "@include://mockraw://profile",
+		"obj2": "@include://mockraw://profile",
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	calls := 0
+	solver := NewURISolverWithOptions("@", "://", WithURIProtocolResolver("mockraw", func(uri string, _ *uriResolveState) (any, error) {
+		calls++
+		assert.Equal(t, "profile", uri)
+		return "{\"env\":\"prod\"}", nil
+	}))
+
+	out := solver.Solve(k)
+
+	assert.Equal(t, "prod", out.Get("obj1.env"))
+	assert.Equal(t, "prod", out.Get("obj2.env"))
+	assert.Equal(t, 1, calls)
+}
+
+func TestKSolver_IncludeProtocol_InvalidJSONDefaultLeavesValue(t *testing.T) {
+	rawValue := "@include://mockraw://profile"
+	defaultValues := map[string]any{
+		"remote_object": rawValue,
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewURISolverWithOptions("@", "://", WithURIProtocolResolver("mockraw", func(_ string, _ *uriResolveState) (any, error) {
+		return "{not json", nil
+	}))
+
+	out := solver.Solve(k)
+	assert.Equal(t, rawValue, out.Get("remote_object"))
+}
+
+func TestKSolver_IncludeProtocol_InvalidJSONRemoveKey(t *testing.T) {
+	rawValue := "@include://mockraw://profile"
+	defaultValues := map[string]any{
+		"remote_object": rawValue,
+	}
+
+	k := koanf.New(".")
+	k.Load(confmap.Provider(defaultValues, "."), nil)
+
+	solver := NewURISolverWithOptions(
+		"@",
+		"://",
+		WithURIOnErrorRemove(),
+		WithURIProtocolResolver("mockraw", func(_ string, _ *uriResolveState) (any, error) {
+			return "{not json", nil
+		}),
+	)
+
+	out := solver.Solve(k)
+	assert.False(t, out.Exists("remote_object"))
+}
