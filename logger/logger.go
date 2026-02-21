@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"fmt"
 	"log"
+	"strings"
 )
 
 type Logger interface {
@@ -22,18 +24,46 @@ func NewDefaultLogger(name string) *DefaultLogger {
 
 func (d *DefaultLogger) Debug(format string, args ...any) {
 	if LoggerEnabled {
-		log.Printf("[DEBUG] "+d.name+" | "+format+"\n", args...)
+		log.Printf("[DEBUG] %s | %s", d.name, formatMessage(format, args...))
 	}
 }
 
 func (d *DefaultLogger) Info(format string, args ...any) {
 	if LoggerEnabled {
-		log.Printf("[INFO] "+d.name+" | "+format+"\n", args...)
+		log.Printf("[INFO] %s | %s", d.name, formatMessage(format, args...))
 	}
 }
 
 func (d *DefaultLogger) Error(format string, args ...any) {
 	if LoggerEnabled {
-		log.Printf("[ERROR] "+d.name+" | "+format+"\n", args...)
+		log.Printf("[ERROR] %s | %s", d.name, formatMessage(format, args...))
 	}
+}
+
+func formatMessage(format string, args ...any) string {
+	if len(args) == 0 {
+		return format
+	}
+
+	if strings.Contains(format, "%") {
+		return fmt.Sprintf(format, args...)
+	}
+
+	var b strings.Builder
+	b.WriteString(format)
+	if len(args)%2 == 0 {
+		for i := 0; i < len(args); i += 2 {
+			b.WriteString(" ")
+			b.WriteString(fmt.Sprint(args[i]))
+			b.WriteString("=")
+			b.WriteString(fmt.Sprint(args[i+1]))
+		}
+		return b.String()
+	}
+
+	for _, arg := range args {
+		b.WriteString(" ")
+		b.WriteString(fmt.Sprint(arg))
+	}
+	return b.String()
 }
