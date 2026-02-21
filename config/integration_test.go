@@ -2,7 +2,9 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/goliatone/go-config/cfgx"
@@ -56,6 +58,24 @@ type IntegrationJSONTestConfig struct {
 }
 
 func (c *IntegrationJSONTestConfig) Validate() error { return nil }
+
+type IntegrationLifecycleConfig struct {
+	Name    string `koanf:"name"`
+	Message string `koanf:"message"`
+
+	validateCalls int
+}
+
+func (c *IntegrationLifecycleConfig) Validate() error {
+	c.validateCalls++
+	if c.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if c.Message == "" {
+		return fmt.Errorf("message is required")
+	}
+	return nil
+}
 
 func TestCfgxBuildOptionalBool(t *testing.T) {
 	cfg := &IntegrationTestConfig{}
@@ -438,6 +458,49 @@ func TestBackwardCompatibility(t *testing.T) {
 			t.Fatalf("Performance test failed: %v", err)
 		}
 	})
+}
+
+func TestLifecycleLoadSolveDecodeNormalizeValidate(t *testing.T) {
+	cfg := &IntegrationLifecycleConfig{}
+	order := []string{}
+
+	container := New(cfg).
+		WithConfigPath("").
+		WithSolverPasses(2).
+		WithProvider(DefaultValuesProvider[*IntegrationLifecycleConfig](map[string]any{
+			"name":    "  world  ",
+			"message": "${name}",
+		})).
+		WithNormalizer(func(c *IntegrationLifecycleConfig) error {
+			order = append(order, "normalize")
+			c.Name = strings.ToUpper(strings.TrimSpace(c.Name))
+			c.Message = strings.ToUpper(strings.TrimSpace(c.Message))
+			return nil
+		}).
+		WithValidator(func(c *IntegrationLifecycleConfig) error {
+			order = append(order, "validator")
+			if c.Name != "WORLD" {
+				return fmt.Errorf("expected normalized name WORLD, got %q", c.Name)
+			}
+			if c.Message != c.Name {
+				return fmt.Errorf("expected message to match normalized name, got %q", c.Message)
+			}
+			return nil
+		})
+
+	if err := container.Load(context.Background()); err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	if len(order) != 2 || order[0] != "normalize" || order[1] != "validator" {
+		t.Fatalf("unexpected lifecycle order: %v", order)
+	}
+	if cfg.validateCalls != 1 {
+		t.Fatalf("expected base Validate to run once, got %d", cfg.validateCalls)
+	}
+	if cfg.Name != "WORLD" || cfg.Message != "WORLD" {
+		t.Fatalf("unexpected final values: name=%q message=%q", cfg.Name, cfg.Message)
+	}
 }
 
 // createTempFile creates a temporary file with the given content for testing
