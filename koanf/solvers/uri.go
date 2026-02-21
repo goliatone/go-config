@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,7 +17,7 @@ import (
 	"go.beyondstorage.io/v5/types"
 )
 
-type ProtocolResolver func(uri string, state *uriResolveState) (string, error)
+type ProtocolResolver func(uri string, state *uriResolveState) (any, error)
 
 type URIErrorStrategy int
 
@@ -42,6 +43,8 @@ type storageReader interface {
 type uriResolveState struct {
 	storagersByConn map[string]storageReader
 	valuesByURI     map[string]string
+	includeByURI    map[string]any
+	includePending  map[string]struct{}
 }
 
 // NewURISolver will resolve variables
@@ -103,14 +106,17 @@ func newStorageReader(conn string) (storageReader, error) {
 }
 
 func (s *uris) registerDefaultResolvers() {
-	s.registerResolver("file", func(uri string, _ *uriResolveState) (string, error) {
+	s.registerResolver("file", func(uri string, _ *uriResolveState) (any, error) {
 		return SolveFileProtocol(s.fs, uri)
 	})
-	s.registerResolver("base64", func(uri string, _ *uriResolveState) (string, error) {
+	s.registerResolver("base64", func(uri string, _ *uriResolveState) (any, error) {
 		return SolveBase64DecodeProtocol(s.fs, uri)
 	})
-	s.registerResolver("storage", func(uri string, state *uriResolveState) (string, error) {
+	s.registerResolver("storage", func(uri string, state *uriResolveState) (any, error) {
 		return s.resolveStorageProtocol(uri, state)
+	})
+	s.registerResolver("include", func(uri string, state *uriResolveState) (any, error) {
+		return s.resolveIncludeProtocol(uri, state)
 	})
 }
 
@@ -125,6 +131,8 @@ func newURIResolveState() *uriResolveState {
 	return &uriResolveState{
 		storagersByConn: map[string]storageReader{},
 		valuesByURI:     map[string]string{},
+		includeByURI:    map[string]any{},
+		includePending:  map[string]struct{}{},
 	}
 }
 
@@ -145,28 +153,11 @@ func (s uris) Solve(config *koanf.Koanf) *koanf.Koanf {
 }
 
 func (s uris) keypath(key, val string, config *koanf.Koanf, state *uriResolveState) {
-	start := strings.Index(val, s.delimeters.Start)
-	if start != 0 {
-		return
-	}
-
-	end := strings.Index(val, s.delimeters.End)
-	if end < start {
-		return
-	}
-
-	start = start + len(s.delimeters.Start)
-
-	protocol := val[start:end]
-
-	end = end + len(s.delimeters.End)
-	uri := val[end:]
-
-	resolver, ok := s.resolvers[protocol]
+	protocol, uri, ok := s.extractProtocolURI(val)
 	if !ok {
 		return
 	}
-	content, err := resolver(uri, state)
+	content, err := s.resolveByProtocol(protocol, uri, state)
 	if err != nil {
 		if s.errorStrategy == URIErrorRemoveKey {
 			config.Delete(key)
@@ -240,6 +231,108 @@ func (s *uris) resolveStorageProtocol(uri string, state *uriResolveState) (strin
 	state.valuesByURI[uri] = content
 
 	return content, nil
+}
+
+func (s *uris) resolveIncludeProtocol(uri string, state *uriResolveState) (any, error) {
+	if state == nil {
+		state = newURIResolveState()
+	}
+	if cached, ok := state.includeByURI[uri]; ok {
+		return cached, nil
+	}
+	if _, pending := state.includePending[uri]; pending {
+		return nil, fmt.Errorf("cyclic include uri %q", uri)
+	}
+
+	protocol, innerURI, err := parseProtocolURI(uri, s.delimeters.End)
+	if err != nil {
+		return nil, err
+	}
+
+	state.includePending[uri] = struct{}{}
+	defer delete(state.includePending, uri)
+
+	rawValue, err := s.resolveByProtocol(protocol, innerURI, state)
+	if err != nil {
+		return nil, err
+	}
+
+	parsed, err := decodeIncludedValue(rawValue)
+	if err != nil {
+		return nil, err
+	}
+	state.includeByURI[uri] = parsed
+	return parsed, nil
+}
+
+func (s uris) resolveByProtocol(protocol, uri string, state *uriResolveState) (any, error) {
+	resolver, ok := s.resolvers[protocol]
+	if !ok {
+		return nil, fmt.Errorf("unknown uri protocol %q", protocol)
+	}
+	return resolver(uri, state)
+}
+
+func (s uris) extractProtocolURI(value string) (protocol string, uri string, ok bool) {
+	start := strings.Index(value, s.delimeters.Start)
+	if start != 0 {
+		return "", "", false
+	}
+	end := strings.Index(value, s.delimeters.End)
+	if end < start {
+		return "", "", false
+	}
+
+	start = start + len(s.delimeters.Start)
+	protocol = value[start:end]
+
+	end = end + len(s.delimeters.End)
+	uri = value[end:]
+	if protocol == "" || uri == "" {
+		return "", "", false
+	}
+
+	return protocol, uri, true
+}
+
+func parseProtocolURI(raw string, delimiter string) (protocol string, uri string, err error) {
+	if delimiter == "" {
+		delimiter = "://"
+	}
+
+	idx := strings.Index(raw, delimiter)
+	if idx <= 0 {
+		return "", "", fmt.Errorf("invalid nested include uri %q", raw)
+	}
+	protocol = strings.TrimSpace(raw[:idx])
+	uri = strings.TrimSpace(raw[idx+len(delimiter):])
+	if protocol == "" || uri == "" {
+		return "", "", fmt.Errorf("invalid nested include uri %q", raw)
+	}
+
+	return protocol, uri, nil
+}
+
+func decodeIncludedValue(value any) (any, error) {
+	switch v := value.(type) {
+	case nil:
+		return nil, fmt.Errorf("include payload is nil")
+	case string:
+		return parseJSON(v)
+	case []byte:
+		return parseJSON(string(v))
+	default:
+		// If a custom resolver already returned an object, accept it.
+		return v, nil
+	}
+}
+
+func parseJSON(input string) (any, error) {
+	var out any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(input)), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func parseStorageURI(uri string) (conn string, objectPath string, err error) {
