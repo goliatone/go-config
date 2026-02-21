@@ -290,3 +290,39 @@ func TestValidationLegacyCompatibilityAndPrecedence(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadPreservesUnexportedState(t *testing.T) {
+	cfg := &managerPipelineConfig{validateErr: errors.New("preserve internal state")}
+	container := newManagerPipelineContainer(cfg, map[string]any{"name": "alice"}).
+		WithValidationMode(ValidationNone)
+
+	if err := container.Load(context.Background()); err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	if cfg.validateErr == nil {
+		t.Fatalf("expected unexported state to be preserved across load")
+	}
+}
+
+func TestValidationReportExposedForBaseValidateFailure(t *testing.T) {
+	cfg := &managerPipelineConfig{validateErr: errors.New("base validate failed")}
+	container := newManagerPipelineContainer(cfg, map[string]any{"name": "alice"}).
+		WithFailFast(true)
+
+	err := container.Load(context.Background())
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+
+	var report *ValidationReport
+	if !errors.As(err, &report) {
+		t.Fatalf("expected ValidationReport via errors.As, got %T", err)
+	}
+	if len(report.Issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(report.Issues))
+	}
+	if report.Issues[0].Stage != "validate" {
+		t.Fatalf("expected validate stage, got %q", report.Issues[0].Stage)
+	}
+}
