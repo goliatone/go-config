@@ -25,24 +25,95 @@ type Validable interface {
 	Validate() error
 }
 
+type ValidationMode int
+
+const (
+	ValidationNone ValidationMode = iota
+	ValidationSemantic
+)
+
+type Normalizer[C any] func(C) error
+type Validator[C any] func(C) error
+
 type Container[C Validable] struct {
-	K            *koanf.Koanf
-	base         C
-	providers    []Provider
-	mustValidate bool
-	strictMerge  bool
-	loadTimeout  time.Duration
-	delimiter    string
-	configPath   string
-	solvers      []solvers.ConfigSolver
-	solverPasses int
-	logger       logger.Logger
+	K              *koanf.Koanf
+	base           C
+	providers      []Provider
+	mustValidate   bool
+	validationMode ValidationMode
+	baseValidate   bool
+	failFast       bool
+	strictDecode   bool
+	normalizers    []Normalizer[C]
+	validators     []Validator[C]
+	strictMerge    bool
+	loadTimeout    time.Duration
+	delimiter      string
+	configPath     string
+	solvers        []solvers.ConfigSolver
+	solverPasses   int
+	logger         logger.Logger
 
 	loaders []ProviderBuilder[C]
 }
 
+// WithValidation is a legacy alias for WithValidationMode.
+// If both methods are used, last call wins by simple mutation order.
 func (c *Container[C]) WithValidation(v bool) *Container[C] {
-	c.mustValidate = v
+	if v {
+		c.validationMode = ValidationSemantic
+	} else {
+		c.validationMode = ValidationNone
+	}
+	c.mustValidate = c.validationMode == ValidationSemantic
+	return c
+}
+
+// WithValidationMode sets semantic validation behavior.
+// If both WithValidation and WithValidationMode are used, last call wins.
+func (c *Container[C]) WithValidationMode(mode ValidationMode) *Container[C] {
+	switch mode {
+	case ValidationNone, ValidationSemantic:
+		c.validationMode = mode
+	default:
+		c.validationMode = ValidationSemantic
+	}
+	c.mustValidate = c.validationMode == ValidationSemantic
+	return c
+}
+
+func (c *Container[C]) WithBaseValidate(enabled bool) *Container[C] {
+	c.baseValidate = enabled
+	return c
+}
+
+func (c *Container[C]) WithFailFast(enabled bool) *Container[C] {
+	c.failFast = enabled
+	return c
+}
+
+func (c *Container[C]) WithStrictDecode(enabled bool) *Container[C] {
+	c.strictDecode = enabled
+	return c
+}
+
+func (c *Container[C]) WithNormalizer(normalizers ...Normalizer[C]) *Container[C] {
+	for _, normalizer := range normalizers {
+		if normalizer == nil {
+			continue
+		}
+		c.normalizers = append(c.normalizers, normalizer)
+	}
+	return c
+}
+
+func (c *Container[C]) WithValidator(validators ...Validator[C]) *Container[C] {
+	for _, validator := range validators {
+		if validator == nil {
+			continue
+		}
+		c.validators = append(c.validators, validator)
+	}
 	return c
 }
 
@@ -98,14 +169,18 @@ func (c *Container[C]) WithProvider(factories ...ProviderBuilder[C]) *Container[
 func New[C Validable](c C) *Container[C] {
 
 	mgr := &Container[C]{
-		mustValidate: true,
-		strictMerge:  true,
-		base:         c,
-		delimiter:    DefaultDelimiter,
-		loadTimeout:  DefaultLoadTimeout,
-		configPath:   DefaultConfigFilepath,
-		logger:       logger.NewDefaultLogger("config"),
-		solverPasses: 1,
+		mustValidate:   true,
+		validationMode: ValidationSemantic,
+		baseValidate:   true,
+		failFast:       true,
+		strictDecode:   false,
+		strictMerge:    true,
+		base:           c,
+		delimiter:      DefaultDelimiter,
+		loadTimeout:    DefaultLoadTimeout,
+		configPath:     DefaultConfigFilepath,
+		logger:         logger.NewDefaultLogger("config"),
+		solverPasses:   1,
 		solvers: []solvers.ConfigSolver{
 			solvers.NewVariablesSolver("${", "}"),
 			solvers.NewURISolver("@", "://"),
@@ -259,7 +334,7 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	c.assignBase(decoded)
 
 	// we can now validate the resulting config object
-	if c.mustValidate {
+	if c.mustValidate && c.baseValidate {
 		if err := c.Validate(); err != nil {
 			return err // already wrapped in Validate() method
 		}
