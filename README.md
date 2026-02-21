@@ -44,7 +44,7 @@ The configuration container is a flexible package for Go that loads configuratio
 - **Validation**: Each configuration struct can implement a `Validate()` method to enforce required rules.
 - **Flexible Merging**: Loaders are applied in a defined order so that later sources override earlier values.
 - **Optional Loaders**: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
-- **Variable Substitution**: Built in support for variable substitution (e.g. env vars), URI solving, and full-match expression evaluation.
+- **Variable Substitution**: Built in support for variable substitution (e.g. env vars), URI solving, storage reads, and expression evaluation.
 - **Solver Control**: Override solver order and enable capped recursive passes when values depend on one another.
 - **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
@@ -740,6 +740,37 @@ Will replace the reference with the decoded value of the variable:
 ```json
 {
     "password": "#pw12;Radd$a.243"
+}
+```
+
+#### `storage`
+
+The `storage` solver reads values from a remote or local storage service through [go storage](https://github.com/beyondstorage/go-storage).
+
+Use this format:
+
+```text
+@storage://<connection_string>#<path>
+```
+
+Rules:
+- The part before `#` is a go storage connection string.
+- The part after `#` is the object path passed to `Read`.
+- On error, the value stays unchanged.
+
+You must import at least one storage service package in your app:
+
+```go
+import (
+	_ "go.beyondstorage.io/services/fs/v4"
+)
+```
+
+Example:
+
+```json
+{
+    "latest_version": "@storage://fs:///tmp/appconfig#releases/latest_version.txt"
 }
 ```
 
