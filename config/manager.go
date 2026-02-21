@@ -35,6 +35,32 @@ const (
 type Normalizer[C any] func(C) error
 type Validator[C any] func(C) error
 
+type ValidationIssue struct {
+	Stage   string
+	Path    string
+	Code    string
+	Message string
+	Cause   error
+}
+
+type ValidationReport struct {
+	Issues []ValidationIssue
+}
+
+func (r *ValidationReport) Error() string {
+	if r == nil || len(r.Issues) == 0 {
+		return "configuration validation failed"
+	}
+	if len(r.Issues) == 1 {
+		issue := r.Issues[0]
+		if issue.Stage != "" {
+			return fmt.Sprintf("%s: %s", issue.Stage, issue.Message)
+		}
+		return issue.Message
+	}
+	return fmt.Sprintf("configuration validation failed with %d issues", len(r.Issues))
+}
+
 type Container[C Validable] struct {
 	K              *koanf.Koanf
 	base           C
@@ -319,24 +345,30 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 
 	// unmarshal configuration into our base struct via cfgx
-	decoded, err := cfgx.Build[C](c.K.Raw(),
+	buildOpts := []cfgx.Option[C]{
 		cfgx.WithDefaults(c.base),
 		cfgx.WithTagName[C]("koanf"),
-	)
+	}
+	if c.strictDecode {
+		buildOpts = append(buildOpts, cfgx.WithStrictKeys[C]())
+	}
+
+	decoded, err := cfgx.Build[C](c.K.Raw(), buildOpts...)
 	if err != nil {
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
 			WithMetadata(map[string]any{
-				"delimiter":    c.delimiter,
-				"strict_merge": c.strictMerge,
+				"delimiter":     c.delimiter,
+				"strict_merge":  c.strictMerge,
+				"strict_decode": c.strictDecode,
 			})
 	}
 	c.assignBase(decoded)
 
 	// we can now validate the resulting config object
-	if c.mustValidate && c.baseValidate {
-		if err := c.Validate(); err != nil {
-			return err // already wrapped in Validate() method
+	if c.mustValidate {
+		if err := c.runSemanticValidation(); err != nil {
+			return err
 		}
 	}
 
@@ -372,4 +404,87 @@ func snapshotConfig(k *koanf.Koanf) (any, bool) {
 		return raw, false
 	}
 	return cloned, true
+}
+
+func (c *Container[C]) runSemanticValidation() error {
+	if c.validationMode == ValidationNone {
+		return nil
+	}
+
+	// Legacy behavior compatibility: when no custom hooks are registered and fail-fast is enabled,
+	// return the same wrapped Validate() error shape as previous container versions.
+	if c.failFast && c.baseValidate && len(c.normalizers) == 0 && len(c.validators) == 0 {
+		return c.Validate()
+	}
+
+	report := &ValidationReport{}
+
+	record := func(stage, code string, err error) error {
+		if err == nil {
+			return nil
+		}
+
+		report.Issues = append(report.Issues, ValidationIssue{
+			Stage:   stage,
+			Code:    code,
+			Message: err.Error(),
+			Cause:   err,
+		})
+
+		if c.failFast {
+			return c.wrapValidationReport(report)
+		}
+		return nil
+	}
+
+	for _, normalizer := range c.normalizers {
+		if normalizer == nil {
+			continue
+		}
+		if err := record("normalize", "CONFIG_NORMALIZATION_FAILED", normalizer(c.base)); err != nil {
+			return err
+		}
+	}
+
+	for _, validator := range c.validators {
+		if validator == nil {
+			continue
+		}
+		if err := record("validate", "CONFIG_VALIDATION_FAILED", validator(c.base)); err != nil {
+			return err
+		}
+	}
+
+	if c.baseValidate {
+		if err := record("validate", "CONFIG_VALIDATION_FAILED", c.base.Validate()); err != nil {
+			return err
+		}
+	}
+
+	if len(report.Issues) > 0 {
+		return c.wrapValidationReport(report)
+	}
+
+	return nil
+}
+
+func (c *Container[C]) wrapValidationReport(report *ValidationReport) error {
+	if report == nil || len(report.Issues) == 0 {
+		return nil
+	}
+
+	metadata := map[string]any{
+		"issues_count": len(report.Issues),
+	}
+	first := report.Issues[0]
+	if first.Stage != "" {
+		metadata["stage"] = first.Stage
+	}
+	if first.Code != "" {
+		metadata["issue_code"] = first.Code
+	}
+
+	return errors.Wrap(report, errors.CategoryValidation, "configuration validation failed").
+		WithTextCode("CONFIG_VALIDATION_FAILED").
+		WithMetadata(metadata)
 }
