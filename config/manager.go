@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -59,6 +60,22 @@ func (r *ValidationReport) Error() string {
 		return issue.Message
 	}
 	return fmt.Sprintf("configuration validation failed with %d issues", len(r.Issues))
+}
+
+func (r *ValidationReport) Unwrap() error {
+	if r == nil || len(r.Issues) == 0 {
+		return nil
+	}
+	causes := make([]error, 0, len(r.Issues))
+	for _, issue := range r.Issues {
+		if issue.Cause != nil {
+			causes = append(causes, issue.Cause)
+		}
+	}
+	if len(causes) == 0 {
+		return nil
+	}
+	return stderrors.Join(causes...)
 }
 
 type Container[C Validable] struct {
@@ -382,16 +399,42 @@ func (c *Container[C]) Raw() C {
 func (c *Container[C]) assignBase(value C) {
 	baseVal := reflect.ValueOf(&c.base).Elem()
 	newVal := reflect.ValueOf(value)
+	if !newVal.IsValid() {
+		return
+	}
 
 	if baseVal.Kind() == reflect.Pointer && newVal.Kind() == reflect.Pointer && baseVal.Type() == newVal.Type() {
 		if baseVal.IsNil() || newVal.IsNil() {
 			baseVal.Set(newVal)
 			return
 		}
-		baseVal.Elem().Set(newVal.Elem())
+		dst := baseVal.Elem()
+		src := newVal.Elem()
+		if dst.Kind() == reflect.Struct && src.Kind() == reflect.Struct {
+			assignExportedStructFields(dst, src)
+			return
+		}
+		dst.Set(src)
 		return
 	}
+
+	if baseVal.Kind() == reflect.Struct && newVal.Kind() == reflect.Struct && baseVal.Type() == newVal.Type() {
+		assignExportedStructFields(baseVal, newVal)
+		return
+	}
+
 	baseVal.Set(newVal)
+}
+
+func assignExportedStructFields(dst, src reflect.Value) {
+	t := dst.Type()
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		dst.Field(i).Set(src.Field(i))
+	}
 }
 
 func snapshotConfig(k *koanf.Koanf) (any, bool) {
@@ -409,12 +452,6 @@ func snapshotConfig(k *koanf.Koanf) (any, bool) {
 func (c *Container[C]) runSemanticValidation() error {
 	if c.validationMode == ValidationNone {
 		return nil
-	}
-
-	// Legacy behavior compatibility: when no custom hooks are registered and fail-fast is enabled,
-	// return the same wrapped Validate() error shape as previous container versions.
-	if c.failFast && c.baseValidate && len(c.normalizers) == 0 && len(c.validators) == 0 {
-		return c.Validate()
 	}
 
 	report := &ValidationReport{}
