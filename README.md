@@ -44,7 +44,7 @@ The configuration container is a flexible package for Go that loads configuratio
 - **Validation**: Each configuration struct can implement a `Validate()` method to enforce required rules.
 - **Flexible Merging**: Loaders are applied in a defined order so that later sources override earlier values.
 - **Optional Loaders**: Easily wrap a provider so that certain errors (such as missing optional files) are ignored.
-- **Variable Substitution**: Built in support for variable substitution (e.g. env vars), URI solving, storage reads, and expression evaluation.
+- **Variable Substitution**: Built in support for variable substitution (e.g. env vars), URI solving, include from URI, storage reads, and expression evaluation.
 - **Solver Control**: Override solver order and enable capped recursive passes when values depend on one another.
 - **Error Handling**: Structured error handling with categories and metadata for better debugging.
 
@@ -772,6 +772,46 @@ Example:
 {
     "latest_version": "@storage://fs:///tmp/appconfig#releases/latest_version.txt"
 }
+```
+
+#### `include`
+
+Use `include` to load a JSON object from another URI resolver.
+
+Use this format:
+
+```text
+@include://<protocol>://<uri>
+```
+
+Example:
+
+```json
+{
+    "release": "@include://storage://fs:///tmp/appconfig#releases/latest.json"
+}
+```
+
+If `latest.json` contains this payload:
+
+```json
+{
+    "version": "1.2.3",
+    "build": 42
+}
+```
+
+Then `release.version` and `release.build` are available in config.
+
+Rules:
+1. The nested resolver can be `storage`, `file`, or any custom URI protocol.
+2. The nested value must be valid JSON text.
+3. On error, the value stays unchanged.
+
+You can remove the key on resolver error:
+
+```go
+uriSolver := solvers.NewURISolverWithOptions("@", "://", solvers.WithURIOnErrorRemove())
 ```
 
 ### Expression Solver
