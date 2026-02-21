@@ -113,7 +113,6 @@ func OnEvalLogAndPanic(logger *log.Logger) EvalErrorHandler {
 		}
 		logWriter.Printf("expression evaluation failed for %s: %s (%v)", key, expr, err)
 		panic(err)
-		return true
 	}
 }
 
