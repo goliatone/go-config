@@ -79,23 +79,26 @@ func (r *ValidationReport) Unwrap() error {
 }
 
 type Container[C Validable] struct {
-	K              *koanf.Koanf
-	base           C
-	providers      []Provider
-	mustValidate   bool
-	validationMode ValidationMode
-	baseValidate   bool
-	failFast       bool
-	strictDecode   bool
-	normalizers    []Normalizer[C]
-	validators     []Validator[C]
-	strictMerge    bool
-	loadTimeout    time.Duration
-	delimiter      string
-	configPath     string
-	solvers        []solvers.ConfigSolver
-	solverPasses   int
-	logger         logger.Logger
+	K                        *koanf.Koanf
+	base                     C
+	providers                []Provider
+	mustValidate             bool
+	validationMode           ValidationMode
+	baseValidate             bool
+	failFast                 bool
+	strictDecode             bool
+	defaultTransformers      bool
+	globalStringTransformers []StringTransformer
+	keyedStringTransformers  map[string][]StringTransformer
+	normalizers              []Normalizer[C]
+	validators               []Validator[C]
+	strictMerge              bool
+	loadTimeout              time.Duration
+	delimiter                string
+	configPath               string
+	solvers                  []solvers.ConfigSolver
+	solverPasses             int
+	logger                   logger.Logger
 
 	loaders []ProviderBuilder[C]
 }
@@ -132,6 +135,37 @@ func (c *Container[C]) WithBaseValidate(enabled bool) *Container[C] {
 
 func (c *Container[C]) WithFailFast(enabled bool) *Container[C] {
 	c.failFast = enabled
+	return c
+}
+
+func (c *Container[C]) WithDefaultTransformers(enabled bool) *Container[C] {
+	c.defaultTransformers = enabled
+	return c
+}
+
+func (c *Container[C]) WithStringTransformer(transformers ...StringTransformer) *Container[C] {
+	for _, transformer := range transformers {
+		if transformer == nil {
+			continue
+		}
+		c.globalStringTransformers = append(c.globalStringTransformers, transformer)
+	}
+	return c
+}
+
+func (c *Container[C]) WithStringTransformerForKey(path string, transformers ...StringTransformer) *Container[C] {
+	if path == "" {
+		return c
+	}
+	if c.keyedStringTransformers == nil {
+		c.keyedStringTransformers = map[string][]StringTransformer{}
+	}
+	for _, transformer := range transformers {
+		if transformer == nil {
+			continue
+		}
+		c.keyedStringTransformers[path] = append(c.keyedStringTransformers[path], transformer)
+	}
 	return c
 }
 
@@ -212,23 +246,25 @@ func (c *Container[C]) WithProvider(factories ...ProviderBuilder[C]) *Container[
 func New[C Validable](c C) *Container[C] {
 
 	mgr := &Container[C]{
-		mustValidate:   true,
-		validationMode: ValidationSemantic,
-		baseValidate:   true,
-		failFast:       true,
-		strictDecode:   false,
-		strictMerge:    true,
-		base:           c,
-		delimiter:      DefaultDelimiter,
-		loadTimeout:    DefaultLoadTimeout,
-		configPath:     DefaultConfigFilepath,
-		logger:         logger.NewDefaultLogger("config"),
-		solverPasses:   1,
+		mustValidate:        true,
+		validationMode:      ValidationSemantic,
+		baseValidate:        true,
+		failFast:            true,
+		strictDecode:        false,
+		defaultTransformers: true,
+		strictMerge:         true,
+		base:                c,
+		delimiter:           DefaultDelimiter,
+		loadTimeout:         DefaultLoadTimeout,
+		configPath:          DefaultConfigFilepath,
+		logger:              logger.NewDefaultLogger("config"),
+		solverPasses:        1,
 		solvers: []solvers.ConfigSolver{
 			solvers.NewVariablesSolver("${", "}"),
 			solvers.NewURISolver("@", "://"),
 			solvers.NewExpressionSolver("{{", "}}"),
 		},
+		keyedStringTransformers: map[string][]StringTransformer{},
 	}
 
 	mgr.newConfig()
@@ -382,11 +418,9 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 	c.assignBase(decoded)
 
-	// we can now validate the resulting config object
-	if c.mustValidate {
-		if err := c.runSemanticValidation(); err != nil {
-			return err
-		}
+	// run post-decode semantic pipeline (transform/normalize/validate).
+	if err := c.runSemanticValidation(); err != nil {
+		return err
 	}
 
 	return nil
@@ -450,19 +484,16 @@ func snapshotConfig(k *koanf.Koanf) (any, bool) {
 }
 
 func (c *Container[C]) runSemanticValidation() error {
-	if c.validationMode == ValidationNone {
-		return nil
-	}
-
 	report := &ValidationReport{}
 
-	record := func(stage, code string, err error) error {
+	record := func(stage, path, code string, err error) error {
 		if err == nil {
 			return nil
 		}
 
 		report.Issues = append(report.Issues, ValidationIssue{
 			Stage:   stage,
+			Path:    path,
 			Code:    code,
 			Message: err.Error(),
 			Cause:   err,
@@ -474,11 +505,22 @@ func (c *Container[C]) runSemanticValidation() error {
 		return nil
 	}
 
+	if err := c.runStringTransformers(record); err != nil {
+		return err
+	}
+
+	if c.validationMode == ValidationNone {
+		if len(report.Issues) > 0 {
+			return c.wrapValidationReport(report)
+		}
+		return nil
+	}
+
 	for _, normalizer := range c.normalizers {
 		if normalizer == nil {
 			continue
 		}
-		if err := record("normalize", "CONFIG_NORMALIZATION_FAILED", normalizer(c.base)); err != nil {
+		if err := record("normalize", "", "CONFIG_NORMALIZATION_FAILED", normalizer(c.base)); err != nil {
 			return err
 		}
 	}
@@ -487,13 +529,13 @@ func (c *Container[C]) runSemanticValidation() error {
 		if validator == nil {
 			continue
 		}
-		if err := record("validate", "CONFIG_VALIDATION_FAILED", validator(c.base)); err != nil {
+		if err := record("validate", "", "CONFIG_VALIDATION_FAILED", validator(c.base)); err != nil {
 			return err
 		}
 	}
 
 	if c.baseValidate {
-		if err := record("validate", "CONFIG_VALIDATION_FAILED", c.base.Validate()); err != nil {
+		if err := record("validate", "", "CONFIG_VALIDATION_FAILED", c.base.Validate()); err != nil {
 			return err
 		}
 	}
