@@ -209,10 +209,25 @@ container.WithFailFast(false)
 // Enforce strict decode (unknown keys fail at decode stage)
 container.WithStrictDecode(true)
 
+// Disable default global TrimSpace transformer (enabled by default)
+container.WithDefaultTransformers(false)
+
+// Register global string transformers (run for all string/[]string/*[]string fields)
+container.WithStringTransformer(
+	config.TrimSpace,
+	config.ToLower,
+)
+
+// Register key-specific string transformers (exact koanf dot-path match)
+container.WithStringTransformerForKey(
+	"queue.backend",
+	config.ToLower,
+)
+
 // Register normalization hooks (run before validators)
 container.WithNormalizer(
 	func(cfg *AppConfig) error {
-		cfg.Name = strings.TrimSpace(cfg.Name)
+		// keep cross-field/domain-specific normalization here
 		return nil
 	},
 )
@@ -268,6 +283,7 @@ Defaults:
 - load timeout 30s
 - solver order: variables → URI → expression
 - validation mode: semantic
+- default global transformers: `TrimSpace`
 - base validate: enabled
 - fail-fast: enabled
 - strict decode: disabled
@@ -300,9 +316,14 @@ Container load lifecycle:
 1. Providers load and merge values.
 2. Solvers execute (`WithSolverPasses` aware).
 3. Decode runs through `cfgx.Build`.
-4. Normalizers run in registration order.
-5. Validators run in registration order.
-6. Built-in `Validate()` runs when semantic mode and base validate are enabled.
+4. Transformers run in registration order:
+   - global string transformers first
+   - key-specific string transformers second (exact path match)
+5. Normalizers run in registration order (semantic mode only).
+6. Validators run in registration order (semantic mode only).
+7. Built-in `Validate()` runs when semantic mode and base validate are enabled.
+
+`ValidationNone` still executes transformers, but skips normalizers, validators, and base `Validate()`.
 
 You can now keep normalization and validation inside the container:
 
@@ -311,8 +332,10 @@ container := config.New(cfg).
 	WithConfigPath("").
 	WithValidationMode(config.ValidationSemantic).
 	WithBaseValidate(true).
+	WithStringTransformer(config.ToLower).
+	WithStringTransformerForKey("admin.base_path", config.EnsureLeadingSlash).
 	WithNormalizer(func(c *AppConfig) error {
-		c.Name = strings.TrimSpace(c.Name)
+		// keep cross-field/defaulting work here
 		return nil
 	}).
 	WithValidator(func(c *AppConfig) error {
@@ -325,10 +348,13 @@ container := config.New(cfg).
 
 Migration from manual post-load flow:
 
-1. Move `normalize(...)` into `WithNormalizer`.
-2. Keep domain checks in `WithValidator` if they are not part of `Validate()`.
-3. Re-enable semantic validation (`WithValidationMode(config.ValidationSemantic)`), or keep legacy `WithValidation(true)`.
-4. Remove manual post-load `normalize` and `Validate` calls.
+1. Move field/key string cleanup from `normalize(...)` into transformers:
+   - global cleanup via `WithStringTransformer(...)`
+   - per-field cleanup via `WithStringTransformerForKey("a.b", ...)`
+2. Keep cross-field/defaulting logic in `WithNormalizer`.
+3. Keep domain checks in `WithValidator` if they are not part of `Validate()`.
+4. Re-enable semantic validation (`WithValidationMode(config.ValidationSemantic)`), or keep legacy `WithValidation(true)`.
+5. Remove manual post-load normalize/validate calls.
 
 ### Strict Decode and Unknown Keys
 
