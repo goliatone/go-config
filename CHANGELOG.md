@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.11.0](https://github.com/goliatone/go-config/compare/v0.10.0...v0.11.0) - (2026-02-23)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.11.0 ([7caed76](https://github.com/goliatone/go-config/commit/7caed76eb3db6f289aed118fb8ca04fa61517570))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Transformers to work on key=>values ([a158d2b](https://github.com/goliatone/go-config/commit/a158d2b9f96ab5b42efc55fac34a8da0001ee019))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.10.0 ([a14203c](https://github.com/goliatone/go-config/commit/a14203ce16f108063a71698d2fdc9beb7b919a20))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([b10742c](https://github.com/goliatone/go-config/commit/b10742c0c293dd06dfea830202a3bc1f6ab87595))  - (goliatone)
+- Update test ([1262c33](https://github.com/goliatone/go-config/commit/1262c33deb9b3cfc01f91919010c9ee9cdd26769))  - (goliatone)
+
 # [0.10.0](https://github.com/goliatone/go-config/compare/v0.9.0...v0.10.0) - (2026-02-21)
 
 ## <!-- 13 -->📦 Bumps
