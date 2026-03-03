@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.12.0](https://github.com/goliatone/go-config/compare/v0.11.0...v0.12.0) - (2026-03-03)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.12.0 ([065e805](https://github.com/goliatone/go-config/commit/065e8059a5d300f0907e206c16da0f6bb749b59c))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Expression functions ([ca76287](https://github.com/goliatone/go-config/commit/ca7628766d6ab9220ad231c259b9651fb2b46aa4))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.11.0 ([f9d293c](https://github.com/goliatone/go-config/commit/f9d293c05730364dbcb85baf7d3da12b8caadabc))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update test ([2e042b0](https://github.com/goliatone/go-config/commit/2e042b0aaabd211be215e2519e3597a21c1684c7))  - (goliatone)
+- Update readme ([fe184e1](https://github.com/goliatone/go-config/commit/fe184e18c0c3f5c60ac5eed51c0fdcf254d044a0))  - (goliatone)
+
 # [0.11.0](https://github.com/goliatone/go-config/compare/v0.10.0...v0.11.0) - (2026-02-23)
 
 ## <!-- 13 -->📦 Bumps
