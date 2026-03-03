@@ -104,6 +104,22 @@ func normalizeExpressionDelimiters(start, end string) (string, string) {
 	return start, end
 }
 
+// ReplaceExpressionSolverEvaluator returns a copy of solver with eval applied
+// when solver is an expression solver. Non-expression solvers are returned
+// unchanged with ok=false.
+func ReplaceExpressionSolverEvaluator(solver ConfigSolver, eval opts.Evaluator) (updated ConfigSolver, ok bool) {
+	exprSolver, ok := solver.(*expression)
+	if !ok || eval == nil {
+		return solver, false
+	}
+	return NewExpressionSolverWithEvaluator(
+		exprSolver.delimiters.Start,
+		exprSolver.delimiters.End,
+		eval,
+		exprSolver.onError,
+	), true
+}
+
 // OnEvalLogAndPanic logs the error then panics.
 func OnEvalLogAndPanic(logger *log.Logger) EvalErrorHandler {
 	return func(key string, expr string, err error, _ *koanf.Koanf) bool {
