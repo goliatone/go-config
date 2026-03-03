@@ -98,6 +98,7 @@ type Container[C Validable] struct {
 	configPath               string
 	solvers                  []solvers.ConfigSolver
 	solverPasses             int
+	expressionFunctions      map[string]ExpressionFunction
 	logger                   logger.Logger
 
 	loaders []ProviderBuilder[C]
@@ -264,6 +265,7 @@ func New[C Validable](c C) *Container[C] {
 			solvers.NewURISolver("@", "://"),
 			solvers.NewExpressionSolver("{{", "}}"),
 		},
+		expressionFunctions:     map[string]ExpressionFunction{},
 		keyedStringTransformers: map[string][]StringTransformer{},
 	}
 
@@ -377,14 +379,15 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	}
 
 	// run all solvers
-	if len(c.solvers) > 0 {
+	effectiveSolvers := c.effectiveSolvers()
+	if len(effectiveSolvers) > 0 {
 		maxPasses := c.solverPasses
 		if maxPasses < 1 {
 			maxPasses = 1
 		}
 		for pass := 0; pass < maxPasses; pass++ {
 			before, ok := snapshotConfig(c.K)
-			for _, solver := range c.solvers {
+			for _, solver := range effectiveSolvers {
 				solver.Solve(c.K)
 			}
 			if !ok {
