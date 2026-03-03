@@ -266,6 +266,14 @@ container.WithSolver(
 	solvers.NewExpressionSolver("{{", "}}"),
 )
 
+// Register expression helper functions available in {{ ... }} templates
+container.WithExpressionFunction("githash", func(args ...any) (any, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("githash expects one argument")
+	}
+	return "f9d293c", nil
+})
+
 // Replace solver order explicitly
 container.WithSolvers(
 	solvers.NewVariablesSolver("${", "}"),
@@ -870,6 +878,28 @@ container.WithSolver(exprSolver)
 Built-in handlers include `OnEvalLogAndPanic`, `OnEvalLeaveUnchanged`, and
 `OnEvalRemove`. You can also pass a custom `opts.Evaluator` from
 `github.com/goliatone/go-options` when you need a different evaluation engine.
+
+You can also register expression functions directly on the container:
+
+```go
+container := config.New(cfg).
+	WithExpressionFunction("githash", func(args ...any) (any, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("githash expects one argument")
+		}
+		return "f9d293c", nil
+	})
+```
+
+Then config values can call your helper:
+
+```json
+{
+    "app": {
+        "hash": "{{ githash(7) }}"
+    }
+}
+```
 
 ### Solver Ordering and Passes
 
