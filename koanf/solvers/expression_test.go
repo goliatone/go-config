@@ -1,8 +1,10 @@
 package solvers
 
 import (
+	"errors"
 	"testing"
 
+	opts "github.com/goliatone/go-options"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/v2"
 	"github.com/stretchr/testify/assert"
@@ -75,4 +77,30 @@ func TestExpressionSolver_OnEvalLogAndPanic(t *testing.T) {
 	assert.Panics(t, func() {
 		solver.Solve(k)
 	})
+}
+
+func TestReplaceExpressionSolverEvaluator(t *testing.T) {
+	original := NewExpressionSolver("{{", "}}")
+	registry := opts.NewFunctionRegistry()
+	err := registry.Register("githash", func(args ...any) (any, error) {
+		if len(args) != 1 {
+			return nil, errors.New("githash expects one arg")
+		}
+		return "f9d293c", nil
+	})
+	assert.NoError(t, err)
+
+	eval := opts.NewExprEvaluator(opts.ExprWithFunctionRegistry(registry))
+	replaced, ok := ReplaceExpressionSolverEvaluator(original, eval)
+	assert.True(t, ok)
+
+	k := koanf.New(".")
+	_ = k.Load(confmap.Provider(map[string]any{
+		"app": map[string]any{
+			"hash": "{{ githash(7) }}",
+		},
+	}, "."), nil)
+
+	replaced.Solve(k)
+	assert.Equal(t, "f9d293c", k.Get("app.hash"))
 }
