@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/goliatone/go-config/koanf/solvers"
 	"github.com/goliatone/go-errors"
 	"github.com/knadh/koanf/v2"
 	"github.com/spf13/pflag"
@@ -35,6 +37,25 @@ type invalidConfig struct {
 }
 
 func (c invalidConfig) Validate() error { return errors.New("invalid config") }
+
+type selectAppConfig struct {
+	App struct {
+		Env string `koanf:"env"`
+	} `koanf:"app"`
+	Reminders struct {
+		MaxReminders int `koanf:"max_reminders"`
+	} `koanf:"reminders"`
+}
+
+func (c selectAppConfig) Validate() error {
+	if strings.TrimSpace(c.App.Env) == "" {
+		return fmt.Errorf("app.env is required")
+	}
+	if c.Reminders.MaxReminders <= 0 {
+		return fmt.Errorf("reminders.max_reminders must be greater than zero")
+	}
+	return nil
+}
 
 func TestContainerLoadFromFile(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "config_*.json")
@@ -185,5 +206,121 @@ func TestOptionalProvider(t *testing.T) {
 
 	if err := loader.Load(context.Background(), k); err != nil {
 		t.Errorf("Expected error to be ignored, got: %v", err)
+	}
+}
+
+func TestContainerSelectSolver_DefaultChainResolves(t *testing.T) {
+	cfg := &selectAppConfig{}
+	defaultValues := map[string]any{
+		"app": map[string]any{
+			"env": "development",
+		},
+		"reminders": map[string]any{
+			"$select":  "${app.env}",
+			"$default": "production",
+			"development": map[string]any{
+				"max_reminders": 2,
+			},
+			"production": map[string]any{
+				"max_reminders": 5,
+			},
+		},
+	}
+
+	container := New(cfg).
+		WithConfigPath("").
+		WithProvider(DefaultValuesProvider[*selectAppConfig](defaultValues))
+
+	if err := container.Load(context.Background()); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.Reminders.MaxReminders != 2 {
+		t.Fatalf("expected reminders.max_reminders=2, got %d", cfg.Reminders.MaxReminders)
+	}
+}
+
+func TestContainerSelectSolver_ErrorPropagatesWithMetadata(t *testing.T) {
+	cfg := &selectAppConfig{}
+	defaultValues := map[string]any{
+		"app": map[string]any{
+			"env": "staging",
+		},
+		"reminders": map[string]any{
+			"$select": "app.env",
+			"development": map[string]any{
+				"max_reminders": 2,
+			},
+		},
+	}
+
+	container := New(cfg).
+		WithConfigPath("").
+		WithProvider(DefaultValuesProvider[*selectAppConfig](defaultValues))
+
+	err := container.Load(context.Background())
+	if err == nil {
+		t.Fatalf("expected load failure for unresolved select")
+	}
+
+	var cfgErr *errors.Error
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("expected go-errors wrapper, got %v", err)
+	}
+	if cfgErr.TextCode != "CONFIG_SELECT_RESOLUTION_FAILED" {
+		t.Fatalf("expected CONFIG_SELECT_RESOLUTION_FAILED, got %q", cfgErr.TextCode)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(cfgErr.Metadata["solver"])); got != "select" {
+		t.Fatalf("expected solver metadata 'select', got %q", got)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(cfgErr.Metadata["select_path"])); got != "app.env" {
+		t.Fatalf("expected select_path metadata app.env, got %q", got)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(cfgErr.Metadata["select_value"])); got != "staging" {
+		t.Fatalf("expected select_value metadata staging, got %q", got)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(cfgErr.Metadata["failing_node_path"])); got != "reminders" {
+		t.Fatalf("expected failing_node_path reminders, got %q", got)
+	}
+
+	var selectErr *solvers.SelectResolutionError
+	if !errors.As(err, &selectErr) {
+		t.Fatalf("expected SelectResolutionError in chain, got %v", err)
+	}
+}
+
+func TestContainerWithSolversReplacesDefaultsAndCanDisableSelect(t *testing.T) {
+	cfg := &selectAppConfig{}
+	defaultValues := map[string]any{
+		"app": map[string]any{
+			"env": "development",
+		},
+		"reminders": map[string]any{
+			"$select":  "${app.env}",
+			"$default": "production",
+			"development": map[string]any{
+				"max_reminders": 2,
+			},
+			"production": map[string]any{
+				"max_reminders": 5,
+			},
+		},
+	}
+
+	container := New(cfg).
+		WithConfigPath("").
+		WithSolvers(
+			solvers.NewVariablesSolver("${", "}"),
+			solvers.NewURISolver("@", "://"),
+			solvers.NewExpressionSolver("{{", "}}"),
+		).
+		WithProvider(DefaultValuesProvider[*selectAppConfig](defaultValues))
+
+	err := container.Load(context.Background())
+	if err == nil {
+		t.Fatalf("expected load failure when select solver is removed")
+	}
+	if !strings.Contains(err.Error(), "reminders.max_reminders must be greater than zero") {
+		t.Fatalf("expected validation failure from unresolved reminders, got %v", err)
 	}
 }
