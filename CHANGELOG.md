@@ -1,15 +1,24 @@
 # Changelog
 
-## Unreleased
+# [0.13.0](https://github.com/goliatone/go-config/compare/v0.12.0...v0.13.0) - (2026-03-10)
 
-### Added
-- Native `$select` / `$default` solver for profile-based object resolution.
-- Default solver chain now includes select resolution after expression.
+## <!-- 13 -->📦 Bumps
 
-### Changed
-- `WithSolvers(...)` replacement behavior is now explicitly documented: include
-  `NewSelectSolver("$select", "$default")` when custom solver lists still need
-  profile selection semantics.
+- Bump version: v0.13.0 ([10f0acd](https://github.com/goliatone/go-config/commit/10f0acd0b00d87d92e29b0ee18b0c7d7266d3aaf))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Koanf select solver ([e08671b](https://github.com/goliatone/go-config/commit/e08671b47287528e1bc97193aefef78a02ccedaf))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.12.0 ([21a8722](https://github.com/goliatone/go-config/commit/21a8722ec63363f27bedc0e5f8943e8c8ec6a9d8))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update docs ([0e5f2cc](https://github.com/goliatone/go-config/commit/0e5f2cce8f93c161ebe608c3a338a773ebd11945))  - (goliatone)
+- Update tests ([94d792a](https://github.com/goliatone/go-config/commit/94d792af0a4765fa088076da2b6b5990de2e01fb))  - (goliatone)
+- Update readme ([cc66567](https://github.com/goliatone/go-config/commit/cc6656745c0d90f688c68a1c74f65afaf7b4f321))  - (goliatone)
 
 # [0.12.0](https://github.com/goliatone/go-config/compare/v0.11.0...v0.12.0) - (2026-03-03)
 
