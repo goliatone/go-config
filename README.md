@@ -10,7 +10,7 @@ To install the package, run:
 go get github.com/goliatone/go-config
 ```
 
-**Note**: This project requires Go 1.18+ for generics support.
+**Note**: This project requires Go 1.24+.
 
 ## cfgx Builder
 
