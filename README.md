@@ -901,11 +901,47 @@ Then config values can call your helper:
 }
 ```
 
+### Select Solver
+
+Select resolves object profiles and replaces the entire object with the chosen
+branch before decode.
+
+```json
+{
+    "app": {
+        "env": "development"
+    },
+    "reminders": {
+        "$select": "${app.env}",
+        "$default": "production",
+        "development": {
+            "max_reminders": 2,
+            "interval_minutes": 1
+        },
+        "production": {
+            "max_reminders": 5,
+            "interval_minutes": 1440
+        }
+    }
+}
+```
+
+Result: `reminders` becomes only the selected object (`development` in this
+example), so normal typed decode works without app-side selection logic.
+
+Rules:
+1. `$select` supports both `${path}` and plain dotted paths (`app.env`).
+2. If selected branch is missing, `$default` is used when present.
+3. If both selected/default branches are missing, load fails with
+   `CONFIG_SELECT_RESOLUTION_FAILED`.
+4. Control keys (`$select`, `$default`) and sibling profile branches are
+   removed from the resolved object.
+
 ### Solver Ordering and Passes
 
-The default solver order is variables → URI → expression, with one pass. Use
-`WithSolvers` to replace ordering and `WithSolverPasses` to enable capped
-recursive passes for nested resolution.
+The default solver order is variables → URI → expression → select, with one
+pass. Use `WithSolvers` to replace ordering and `WithSolverPasses` to enable
+capped recursive passes for nested resolution.
 
 ```go
 container := config.New(cfg).
@@ -913,9 +949,13 @@ container := config.New(cfg).
 		solvers.NewVariablesSolver("${", "}"),
 		solvers.NewURISolver("@", "://"),
 		solvers.NewExpressionSolver("{{", "}}"),
+		solvers.NewSelectSolver("$select", "$default"),
 	).
 	WithSolverPasses(2)
 ```
+
+`WithSolvers(...)` fully replaces defaults. If you override solver order, add
+`NewSelectSolver` explicitly when you need `$select` resolution.
 
 ## Providers
 

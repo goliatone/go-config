@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Native `$select` / `$default` solver for profile-based object resolution.
+- Default solver chain now includes select resolution after expression.
+
+### Changed
+- `WithSolvers(...)` replacement behavior is now explicitly documented: include
+  `NewSelectSolver("$select", "$default")` when custom solver lists still need
+  profile selection semantics.
+
 # [0.12.0](https://github.com/goliatone/go-config/compare/v0.11.0...v0.12.0) - (2026-03-03)
 
 ## <!-- 13 -->📦 Bumps
