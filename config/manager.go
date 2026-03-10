@@ -264,6 +264,7 @@ func New[C Validable](c C) *Container[C] {
 			solvers.NewVariablesSolver("${", "}"),
 			solvers.NewURISolver("@", "://"),
 			solvers.NewExpressionSolver("{{", "}}"),
+			solvers.NewSelectSolver("$select", "$default"),
 		},
 		expressionFunctions:     map[string]ExpressionFunction{},
 		keyedStringTransformers: map[string][]StringTransformer{},
@@ -389,6 +390,26 @@ func (c *Container[C]) Load(ctx context.Context) error {
 			before, ok := snapshotConfig(c.K)
 			for _, solver := range effectiveSolvers {
 				solver.Solve(c.K)
+				if reporter, ok := solver.(solvers.ErrorReporter); ok {
+					if solverErr := reporter.Err(); solverErr != nil {
+						metadata := map[string]any{
+							"solver": fmt.Sprintf("%T", solver),
+						}
+
+						var selectErr *solvers.SelectResolutionError
+						if stderrors.As(solverErr, &selectErr) {
+							metadata["solver"] = "select"
+							metadata["select_path"] = selectErr.SelectPath
+							metadata["select_value"] = selectErr.SelectValue
+							metadata["default_key"] = selectErr.DefaultKey
+							metadata["failing_node_path"] = selectErr.NodePath
+						}
+
+						return errors.Wrap(solverErr, errors.CategoryValidation, "failed to resolve select configuration").
+							WithTextCode("CONFIG_SELECT_RESOLUTION_FAILED").
+							WithMetadata(metadata)
+					}
+				}
 			}
 			if !ok {
 				continue
