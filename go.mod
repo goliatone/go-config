@@ -5,6 +5,8 @@ go 1.24.10
 require (
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/goliatone/go-errors v0.10.0
+	github.com/goliatone/go-logger v0.8.4
+	github.com/goliatone/go-masker v0.2.0
 	github.com/goliatone/go-options v0.7.1
 	github.com/knadh/koanf/parsers/json v0.1.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
@@ -28,6 +30,7 @@ require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dop251/goja v0.0.0-20251201205617-2bb4c724c0f9 // indirect
 	github.com/expr-lang/expr v1.17.7 // indirect
+	github.com/fatih/color v1.18.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
@@ -35,10 +38,13 @@ require (
 	github.com/google/cel-go v0.26.1 // indirect
 	github.com/google/pprof v0.0.0-20251208000136-3d256cb9ff16 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/showa-93/go-mask v0.6.2 // indirect
 	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/tidwall/gjson v1.14.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
