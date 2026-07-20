@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.14.0](https://github.com/goliatone/go-config/compare/v0.13.0...v0.14.0) - (2026-07-20)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.14.0 ([bd8da03](https://github.com/goliatone/go-config/commit/bd8da03c9d838c4d4755ed948d5a4ee7ef712a99))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Masker log output ([c7ea69a](https://github.com/goliatone/go-config/commit/c7ea69a68296d0792aa0d64d0b27a2154f32a2d9))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.13.0 ([ab05406](https://github.com/goliatone/go-config/commit/ab0540684b44fd6f2ecf004555f17e0266ce716d))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([fb50231](https://github.com/goliatone/go-config/commit/fb502317fceae2ccadb76b760de01741381626d9))  - (goliatone)
+- Update tests ([f20a693](https://github.com/goliatone/go-config/commit/f20a69304f7948fc30d175fb7ec844240b5b7c5f))  - (goliatone)
+
 # [0.13.0](https://github.com/goliatone/go-config/compare/v0.12.0...v0.13.0) - (2026-03-10)
 
 ## <!-- 13 -->📦 Bumps
