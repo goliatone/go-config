@@ -1,6 +1,7 @@
 package env
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -86,7 +87,10 @@ func (e *Env) ReadBytes() ([]byte, error) {
 
 	for _, k := range keys {
 		parts := strings.SplitN(k, "=", 2)
-		e.logger.Debug("=", "var", k)
+		if len(parts) != 2 {
+			continue
+		}
+		e.logger.Debug("environment variable discovered", "key", parts[0])
 
 		var (
 			key   string
@@ -105,13 +109,23 @@ func (e *Env) ReadBytes() ([]byte, error) {
 			key = parts[0]
 			value = parts[1]
 		}
-		e.logger.Debug("=", "key", key)
+		e.logger.Debug("environment variable loaded", "key", key)
 		if err := e.set(key, value); err != nil {
 			return []byte{}, err
 		}
 	}
 
-	e.logger.Debug("==== done: " + e.out)
+	var output any
+	if err := json.Unmarshal([]byte(e.out), &output); err != nil {
+		e.logger.Error("environment configuration log omitted", "reason", "invalid JSON output")
+		return []byte(e.out), nil
+	}
+	maskedOutput, err := logger.MaskSensitive(output)
+	if err != nil {
+		e.logger.Error("environment configuration log omitted", "reason", "masking failed")
+		return []byte(e.out), nil
+	}
+	e.logger.Debug("environment configuration loaded", "config", maskedOutput)
 
 	return []byte(e.out), nil
 }
