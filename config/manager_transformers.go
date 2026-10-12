@@ -40,6 +40,9 @@ func (c *Container[C]) transformValue(
 		return nil
 	}
 
+	if c.opaquePolicy != nil && value.CanInterface() && c.opaquePolicy(value.Type()) {
+		return nil
+	}
 	switch value.Kind() {
 	case reflect.Pointer:
 		if value.IsNil() {

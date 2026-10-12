@@ -29,11 +29,12 @@ const (
 type URISolverOption func(*uris)
 
 type uris struct {
-	fs            fs.FS
-	delimeters    *delimiters
-	resolvers     map[string]ProtocolResolver
-	newStorager   func(conn string) (storageReader, error)
-	errorStrategy URIErrorStrategy
+	fs               fs.FS
+	delimeters       *delimiters
+	resolvers        map[string]ProtocolResolver
+	newStorager      func(conn string) (storageReader, error)
+	reservedPrefixes []string
+	errorStrategy    URIErrorStrategy
 }
 
 type storageReader interface {
@@ -79,6 +80,17 @@ func NewURISolverWithFSAndOptions(s, e string, f fs.FS, opts ...URISolverOption)
 		opt(solver)
 	}
 	return solver
+}
+
+// WithURIReservedPrefixes leaves terminal directives untouched, including on URI errors.
+func WithURIReservedPrefixes(prefixes ...string) URISolverOption {
+	return func(s *uris) {
+		for _, prefix := range prefixes {
+			if prefix != "" {
+				s.reservedPrefixes = append(s.reservedPrefixes, prefix)
+			}
+		}
+	}
 }
 
 func WithURIErrorStrategy(strategy URIErrorStrategy) URISolverOption {
@@ -153,6 +165,11 @@ func (s uris) Solve(config *koanf.Koanf) *koanf.Koanf {
 }
 
 func (s uris) keypath(key, val string, config *koanf.Koanf, state *uriResolveState) {
+	for _, prefix := range s.reservedPrefixes {
+		if strings.HasPrefix(val, prefix) {
+			return
+		}
+	}
 	protocol, uri, ok := s.extractProtocolURI(val)
 	if !ok {
 		return
@@ -351,4 +368,15 @@ func parseStorageURI(uri string) (conn string, objectPath string, err error) {
 	}
 
 	return conn, objectPath, nil
+}
+
+// ReserveURIPrefixes preserves terminal markers without changing the registered solver.
+func ReserveURIPrefixes(solver ConfigSolver, prefixes ...string) ConfigSolver {
+	uri, ok := solver.(*uris)
+	if !ok || len(prefixes) == 0 {
+		return solver
+	}
+	cloned := *uri
+	cloned.reservedPrefixes = append(append([]string(nil), uri.reservedPrefixes...), prefixes...)
+	return &cloned
 }

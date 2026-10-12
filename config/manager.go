@@ -96,6 +96,11 @@ type Container[C Validable] struct {
 	loadTimeout              time.Duration
 	delimiter                string
 	configPath               string
+	reservedDirectives       []string
+	finalSolvers             []solvers.FinalSolver
+	opaquePolicy             cfgx.OpaquePolicy
+	defaultsCloner           func(C) (C, error)
+	stagedLoad               bool
 	solvers                  []solvers.ConfigSolver
 	solverPasses             int
 	expressionFunctions      map[string]ExpressionFunction
@@ -210,6 +215,34 @@ func (c *Container[C]) WithConfigPath(p string) *Container[C] {
 	return c
 }
 
+func (c *Container[C]) WithDefaultsCloner(cloner func(C) (C, error)) *Container[C] {
+	c.defaultsCloner = cloner
+	return c
+}
+
+func (c *Container[C]) WithOpaqueValues(policy cfgx.OpaquePolicy) *Container[C] {
+	c.opaquePolicy = policy
+	return c
+}
+
+func (c *Container[C]) WithReservedDirectives(prefixes ...string) *Container[C] {
+	for _, prefix := range prefixes {
+		if prefix != "" {
+			c.reservedDirectives = append(c.reservedDirectives, prefix)
+		}
+	}
+	return c
+}
+
+func (c *Container[C]) WithFinalSolver(finals ...solvers.FinalSolver) *Container[C] {
+	for _, final := range finals {
+		if final != nil {
+			c.finalSolvers = append(c.finalSolvers, final)
+		}
+	}
+	return c
+}
+
 func (c *Container[C]) WithSolver(slvrs ...solvers.ConfigSolver) *Container[C] {
 	c.solvers = append(c.solvers, slvrs...)
 	return c
@@ -284,6 +317,9 @@ func (c *Container[C]) newConfig() {
 
 func (c *Container[C]) Validate() error {
 	if err := c.base.Validate(); err != nil {
+		if len(c.finalSolvers) > 0 || c.opaquePolicy != nil {
+			return errors.New("configuration validation failed", errors.CategoryValidation).WithTextCode("CONFIG_VALIDATION_FAILED")
+		}
 		return errors.Wrap(err, errors.CategoryValidation, "configuration validation failed").
 			WithTextCode("CONFIG_VALIDATION_FAILED")
 	}
@@ -312,6 +348,22 @@ func (c *Container[C]) MustLoad(ctx context.Context) {
 }
 
 func (c *Container[C]) Load(ctx context.Context) error {
+	if len(c.finalSolvers) == 0 && c.opaquePolicy == nil {
+		return c.load(ctx)
+	}
+	working := *c
+	working.stagedLoad = true
+	working.providers = append([]Provider(nil), c.providers...)
+	if err := working.load(ctx); err != nil {
+		return err
+	}
+	c.base = working.base
+	c.K = working.K
+	c.providers = working.providers
+	return nil
+}
+
+func (c *Container[C]) load(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
 
@@ -323,12 +375,10 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		for i, factory := range c.loaders {
 			provider, err := factory(c)
 			if err != nil {
-				return errors.Wrap(err, errors.CategoryOperation, "failed to create provider").
-					WithTextCode("PROVIDER_CREATION_FAILED").
-					WithMetadata(map[string]any{
-						"factory_index":   i,
-						"total_factories": len(c.loaders),
-					})
+				return c.providerFailure(err, errors.CategoryOperation, "failed to create provider", "PROVIDER_CREATION_FAILED", "provider_create", map[string]any{
+					"factory_index":   i,
+					"total_factories": len(c.loaders),
+				})
 			}
 			c.providers = append(c.providers, provider)
 		}
@@ -340,11 +390,9 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		f := OptionalProvider(FileProvider[C](c.configPath))
 		p, err := f(c)
 		if err != nil {
-			return errors.Wrap(err, errors.CategoryOperation, "failed to create default file provider").
-				WithTextCode("DEFAULT_PROVIDER_FAILED").
-				WithMetadata(map[string]any{
-					"config_path": c.configPath,
-				})
+			return c.providerFailure(err, errors.CategoryOperation, "failed to create default file provider", "DEFAULT_PROVIDER_FAILED", "default_provider_create", map[string]any{
+				"config_path": c.configPath,
+			})
 		}
 		c.providers = append(c.providers, p)
 	}
@@ -352,12 +400,10 @@ func (c *Container[C]) Load(ctx context.Context) error {
 	// validate our providers
 	for i, src := range c.providers {
 		if err := src.Validate(); err != nil {
-			return errors.Wrap(err, errors.CategoryValidation, "invalid provider source type").
-				WithTextCode("INVALID_PROVIDER_TYPE").
-				WithMetadata(map[string]any{
-					"source_type":    string(src.Type()),
-					"provider_index": i,
-				})
+			return c.providerFailure(err, errors.CategoryValidation, "invalid provider source type", "INVALID_PROVIDER_TYPE", "provider_validate", map[string]any{
+				"source_type":    string(src.Type()),
+				"provider_index": i,
+			})
 		}
 	}
 
@@ -367,15 +413,17 @@ func (c *Container[C]) Load(ctx context.Context) error {
 
 	// load providers
 	for i, source := range c.providers {
-		c.logger.Debug("= loading source", "source_type", source.Type())
+		if c.stagedLoad {
+			c.logger.Debug("= loading source", "source_index", i)
+		} else {
+			c.logger.Debug("= loading source", "source_type", source.Type())
+		}
 		if err := source.Load(ctx, c.K); err != nil {
-			return errors.Wrap(err, errors.CategoryOperation, "failed to load configuration from source").
-				WithTextCode("CONFIG_LOAD_FAILED").
-				WithMetadata(map[string]any{
-					"source_type":   string(source.Type()),
-					"source_index":  i,
-					"total_sources": len(c.providers),
-				})
+			return c.providerFailure(err, errors.CategoryOperation, "failed to load configuration from source", "CONFIG_LOAD_FAILED", "provider_load", map[string]any{
+				"source_type":   string(source.Type()),
+				"source_index":  i,
+				"total_sources": len(c.providers),
+			})
 		}
 	}
 
@@ -389,25 +437,11 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		for pass := 0; pass < maxPasses; pass++ {
 			before, ok := snapshotConfig(c.K)
 			for _, solver := range effectiveSolvers {
+				solver = solvers.ReserveURIPrefixes(solver, c.reservedDirectives...)
 				solver.Solve(c.K)
 				if reporter, ok := solver.(solvers.ErrorReporter); ok {
 					if solverErr := reporter.Err(); solverErr != nil {
-						metadata := map[string]any{
-							"solver": fmt.Sprintf("%T", solver),
-						}
-
-						var selectErr *solvers.SelectResolutionError
-						if stderrors.As(solverErr, &selectErr) {
-							metadata["solver"] = "select"
-							metadata["select_path"] = selectErr.SelectPath
-							metadata["select_value"] = selectErr.SelectValue
-							metadata["default_key"] = selectErr.DefaultKey
-							metadata["failing_node_path"] = selectErr.NodePath
-						}
-
-						return errors.Wrap(solverErr, errors.CategoryValidation, "failed to resolve select configuration").
-							WithTextCode("CONFIG_SELECT_RESOLUTION_FAILED").
-							WithMetadata(metadata)
+						return solverFailure(solverErr, false)
 					}
 				}
 			}
@@ -421,17 +455,47 @@ func (c *Container[C]) Load(ctx context.Context) error {
 		}
 	}
 
+	input := c.K.Raw()
+	for _, final := range c.finalSolvers {
+		if err := ctx.Err(); err != nil {
+			return solverFailure(err, true)
+		}
+		if err := final.SolveContext(ctx, input); err != nil {
+			return solverFailure(err, true)
+		}
+	}
+	if c.stagedLoad {
+		if err := ctx.Err(); err != nil {
+			return solverFailure(err, true)
+		}
+	}
+
 	// unmarshal configuration into our base struct via cfgx
 	buildOpts := []cfgx.Option[C]{
 		cfgx.WithDefaults(c.base),
 		cfgx.WithTagName[C]("koanf"),
 	}
+	if c.stagedLoad {
+		cloner := c.defaultsCloner
+		if cloner == nil {
+			cloner = func(value C) (C, error) { return cfgx.CloneDefaults(value, c.opaquePolicy) }
+		}
+		buildOpts = append(buildOpts, cfgx.WithDefaultsCloner[C](cloner))
+	} else if c.defaultsCloner != nil {
+		buildOpts = append(buildOpts, cfgx.WithDefaultsCloner[C](c.defaultsCloner))
+	}
+	if c.opaquePolicy != nil {
+		buildOpts = append(buildOpts, cfgx.WithOpaqueValues[C](c.opaquePolicy))
+	}
 	if c.strictDecode {
 		buildOpts = append(buildOpts, cfgx.WithStrictKeys[C]())
 	}
 
-	decoded, err := cfgx.Build[C](c.K.Raw(), buildOpts...)
+	decoded, err := cfgx.Build[C](input, buildOpts...)
 	if err != nil {
+		if c.stagedLoad {
+			err = cfgx.SafeBuildError(err)
+		}
 		return errors.Wrap(err, errors.CategoryOperation, "failed to unmarshal configuration data").
 			WithTextCode("CONFIG_UNMARSHAL_FAILED").
 			WithMetadata(map[string]any{
@@ -440,13 +504,25 @@ func (c *Container[C]) Load(ctx context.Context) error {
 				"strict_decode": c.strictDecode,
 			})
 	}
-	c.assignBase(decoded)
+	if c.stagedLoad {
+		c.base = decoded
+	} else {
+		c.assignBase(decoded)
+	}
 
 	// run post-decode semantic pipeline (transform/normalize/validate).
 	if err := c.runSemanticValidation(); err != nil {
 		return err
 	}
 
+	if err := cfgx.ValidateOpaque(c.base, c.opaquePolicy); err != nil {
+		return errors.Wrap(err, errors.CategoryValidation, "configuration validation failed").WithTextCode("CONFIG_VALIDATION_FAILED")
+	}
+	if c.stagedLoad {
+		if err := ctx.Err(); err != nil {
+			return solverFailure(err, true)
+		}
+	}
 	return nil
 }
 
@@ -515,12 +591,16 @@ func (c *Container[C]) runSemanticValidation() error {
 			return nil
 		}
 
+		message, cause := "configuration stage failed", safeContextCause(err)
+		if !c.stagedLoad {
+			message, cause = err.Error(), err
+		}
 		report.Issues = append(report.Issues, ValidationIssue{
 			Stage:   stage,
 			Path:    path,
 			Code:    code,
-			Message: err.Error(),
-			Cause:   err,
+			Message: message,
+			Cause:   cause,
 		})
 
 		if c.failFast {
@@ -590,4 +670,37 @@ func (c *Container[C]) wrapValidationReport(report *ValidationReport) error {
 	return errors.Wrap(report, errors.CategoryValidation, "configuration validation failed").
 		WithTextCode("CONFIG_VALIDATION_FAILED").
 		WithMetadata(metadata)
+}
+
+func solverFailure(err error, terminal bool) error {
+	if !terminal {
+		var selected *solvers.SelectResolutionError
+		if stderrors.As(err, &selected) {
+			return errors.Wrap(err, errors.CategoryValidation, "failed to resolve select configuration").
+				WithTextCode("CONFIG_SELECT_RESOLUTION_FAILED").WithMetadata(map[string]any{
+				"solver": "select", "select_path": selected.SelectPath,
+				"select_value": selected.SelectValue, "default_key": selected.DefaultKey,
+				"failing_node_path": selected.NodePath,
+			})
+		}
+	}
+	code, stage := "CONFIG_SOLVER_FAILED", "solver"
+	if terminal {
+		code, stage = "CONFIG_FINAL_SOLVER_FAILED", "terminal"
+	}
+	safeCause := safeContextCause(err)
+	failure := errors.New("configuration solver failed", errors.CategoryOperation)
+	failure.Source = safeCause
+	return failure.
+		WithTextCode(code).WithMetadata(map[string]any{"stage": stage})
+}
+
+func safeContextCause(err error) error {
+	if stderrors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if stderrors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	return nil
 }

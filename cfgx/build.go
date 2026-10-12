@@ -78,14 +78,16 @@ func stageError(stage string, base, err error, meta map[string]any) error {
 
 // builder holds Build state and user-supplied options.
 type builder[T any] struct {
-	input         any
-	defaults      func() (T, error)
-	preprocessors []Preprocessor
-	decodeHooks   []mapstructure.DecodeHookFunc
-	decoderConfig mapstructure.DecoderConfig
-	validator     Validator[T]
-	useHookSet    bool
-	optionErr     error
+	input          any
+	defaults       func() (T, error)
+	defaultsCloner func(T) (T, error)
+	preprocessors  []Preprocessor
+	decodeHooks    []mapstructure.DecodeHookFunc
+	decoderConfig  mapstructure.DecoderConfig
+	validator      Validator[T]
+	useHookSet     bool
+	optionErr      error
+	opaquePolicy   OpaquePolicy
 }
 
 func newBuilder[T any](input any) *builder[T] {
@@ -110,11 +112,22 @@ func Build[T any](input any, opts ...Option[T]) (T, error) {
 		}
 		opt(b)
 	}
+	if b.opaquePolicy != nil && len(b.preprocessors) > 0 {
+		var zero T
+		return zero, ErrOption
+	}
 	if b.optionErr != nil {
 		var zero T
+		if b.opaquePolicy != nil {
+			return zero, ErrOption
+		}
 		return zero, b.optionErr
 	}
-	return b.build()
+	result, err := b.build()
+	if b.opaquePolicy != nil {
+		err = SafeBuildError(err)
+	}
+	return result, err
 }
 
 func (b *builder[T]) setOptionError(format string, args ...any) {
@@ -147,11 +160,19 @@ func (b *builder[T]) build() (T, error) {
 		return zero, err
 	}
 
+	if err := ValidateOpaque(result, b.opaquePolicy); err != nil {
+		var zero T
+		return zero, stageError(stageDecode, ErrDecode, err, nil)
+	}
 	if err := b.runValidator(&result); err != nil {
 		var zero T
 		return zero, err
 	}
 
+	if err := ValidateOpaque(result, b.opaquePolicy); err != nil {
+		var zero T
+		return zero, stageError(stageValidate, ErrValidate, err, nil)
+	}
 	return result, nil
 }
 
@@ -165,12 +186,25 @@ func (b *builder[T]) applyDefaults() (T, error) {
 		var zero T
 		return zero, stageError(stageDefaults, ErrDefaults, err, nil)
 	}
-	cloned, err := cloneValue(val)
+	var cloned T
+	if b.defaultsCloner != nil {
+		cloned, err = b.defaultsCloner(val)
+		if err == nil {
+			err = validateClonerResult(val, cloned, b.opaquePolicy)
+		}
+	} else if b.opaquePolicy != nil {
+		cloned, err = CloneDefaults(val, b.opaquePolicy)
+	} else {
+		cloned, err = cloneValue(val)
+	}
 	if err != nil {
 		var zero T
 		return zero, stageError(stageDefaults, ErrDefaults, err, map[string]any{
 			"reason": "clone",
 		})
+	}
+	if err := ValidateOpaque(cloned, b.opaquePolicy); err != nil {
+		return cloned, stageError(stageDefaults, ErrDefaults, err, nil)
 	}
 	return cloned, nil
 }
@@ -198,6 +232,9 @@ func (b *builder[T]) decode(input any, result *T) error {
 	config := b.decoderConfig
 	config.Result = target
 	config.DecodeHook = b.composeDecodeHooks()
+	if b.opaquePolicy != nil {
+		config.DecodeHook = opaqueDecodeHook(b.opaquePolicy, config.DecodeHook, config)
+	}
 	decoder, err := mapstructure.NewDecoder(&config)
 	if err != nil {
 		return stageError(stageDecode, ErrDecode, err, map[string]any{"reason": "decoder_config"})
