@@ -1209,3 +1209,63 @@ k.Load(env.Provider(EnvPrefix, "__", func(s string) string {
 		strings.TrimPrefix(s, EnvPrefix)), EnvLevel, ".", -1)
 }), json.Parser(), koanf.WithMergeFunc(config.MergeWithBooleanPrecedence))
 ```
+
+### Terminal solving and caller-owned values
+
+`WithFinalSolver(solvers.FinalSolver)` runs `SolveContext(context.Context, map[string]any) error`
+once after ordinary solver passes and selection, before typed decode. The context includes
+the load timeout. Solvers receive private selected input and must not retain that map.
+`WithReservedDirectives("@secret://")` preserves terminal prefixes during built-in URI
+solving, including remove-on-error; `solvers.WithURIReservedPrefixes` supports custom
+URI setup. Reservation performs no parsing or I/O.
+
+Terminal or opaque loads publish a new validated generation through `Raw()`. The seed
+passed to `New` and earlier published generations stay unchanged. Read `Raw()` after a
+successful Load; do not expect the seed pointer to update in this opted-in mode. `K`
+remains ordinary selected input, including unresolved terminal directives; final output
+is available only in typed configuration. Failure publishes neither view. Legacy loads
+without these options retain their existing assignment and diagnostic behavior.
+
+```go
+container := config.New(seed).
+    WithOpaqueValues(policy).
+    WithFinalSolver(terminal)
+if err := container.Load(ctx); err != nil {
+    return err
+}
+current := container.Raw()
+```
+
+`cfgx.OpaquePolicy func(reflect.Type) bool` identifies caller-owned pointer types.
+`Container.WithOpaqueValues(policy)` and `cfgx.WithOpaqueValues[T](policy)` retain exact
+pointer identity in concrete pointer fields or assignable nonempty typed interfaces,
+including collection elements. Empty-interface destinations and opaque map keys fail
+safely. `cfgx.ValidateOpaque` checks the complete candidate without traversing owned
+payloads, covering defaults, direct aggregate decode and callback results. Direct opaque
+assignment bypasses decoder hooks; string transformers stop at registered types.
+
+`cfgx.CloneDefaults` isolates ordinary state and preserves scalar private fields and
+owned pointers without global copy hooks. Distinct slice views are traversed completely;
+reference cycles are handled by the clone. Private mutable references, locks and callable
+state fail with `cfgx.ErrDefaultsClonerRequired`. Use `Container.WithDefaultsCloner` or
+`cfgx.WithDefaultsCloner[T]` to supply an explicit cloner for such configurations. It must
+return a distinct candidate root, isolate every mutable ordinary/private reference,
+preserve validation behavior and retain owned pointer identity. Cloners are trusted code;
+they must not mutate their input, acquire secrets, or retain failed candidates.
+
+The external adapter wraps every Load in a new acquisition scope. Destroy newly acquired
+values on any load/decode/validation failure; on success hand over the scope and release
+the prior generation only after its consumers finish. Direct Load performs no cleanup.
+Borrowed bytes must not outlive their owned values. Semantic callbacks must not mutate
+retained owned state or retain failed candidates. go-config never acquires or destroys
+unknown values. Concurrent load/read synchronization remains the caller's responsibility.
+
+Opaque policies must be stable, side-effect-free type checks, for example
+`func(t reflect.Type) bool { return t == reflect.TypeOf((*OwnedValue)(nil)) }`.
+Owned values enter only through terminal maps or typed defaults, never ordinary providers
+or solvers. Opaque cfgx builds reject preprocessors. Protected provider failures preserve
+only safe stage/index metadata and cancellation sentinels, omitting raw provider causes
+and source labels. Decode and semantic diagnostics likewise omit foreign causes;
+`cfgx.SafeBuildError` retains known stage/ownership sentinels. Generic and terminal solver
+errors have distinct CONFIG_SOLVER_FAILED/CONFIG_FINAL_SOLVER_FAILED codes; select
+errors retain CONFIG_SELECT_RESOLUTION_FAILED.
