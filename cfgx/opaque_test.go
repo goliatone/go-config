@@ -17,7 +17,7 @@ func (*opaqueFake) Read()          {}
 
 type opaqueReader interface{ Read() }
 
-func opaqueFakePolicy(t reflect.Type) bool { return t == reflect.TypeOf((*opaqueFake)(nil)) }
+func opaqueFakePolicy(t reflect.Type) bool { return t == reflect.TypeFor[*opaqueFake]() }
 
 func TestOpaqueBuildIdentityAndRejection(t *testing.T) {
 	v := &opaqueFake{Text: "payload"}

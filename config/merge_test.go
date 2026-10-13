@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"testing"
 )
 
@@ -70,9 +71,7 @@ func TestMergeIgnoringNullValues_BooleanHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Make a copy of dest to avoid modifying the test case
 			dest := make(map[string]any)
-			for k, v := range tt.dest {
-				dest[k] = v
-			}
+			maps.Copy(dest, tt.dest)
 
 			err := MergeIgnoringNullValues(tt.src, dest)
 			if err != nil {
@@ -155,9 +154,7 @@ func TestCurrentProviderPrecedenceWithBooleans(t *testing.T) {
 			result := make(map[string]any)
 
 			// Step 1: Load defaults (no merge needed for first load)
-			for k, v := range tt.defaults {
-				result[k] = v
-			}
+			maps.Copy(result, tt.defaults)
 
 			// Step 2: Merge struct data (providers don't use merge for struct)
 			// But let's simulate what would happen if they did
@@ -256,9 +253,7 @@ func TestStringVsBooleanMergeBehavior(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dest := make(map[string]any)
-			for k, v := range tt.dest {
-				dest[k] = v
-			}
+			maps.Copy(dest, tt.dest)
 
 			err := MergeIgnoringNullValues(tt.src, dest)
 			if err != nil {
@@ -409,9 +404,7 @@ func TestMergeWithBooleanPrecedence_OptionalBoolHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Make a copy of dest to avoid modifying the test case
 			dest := make(map[string]any)
-			for k, v := range tt.dest {
-				dest[k] = v
-			}
+			maps.Copy(dest, tt.dest)
 
 			err := MergeWithBooleanPrecedence(tt.src, dest)
 			if err != nil {

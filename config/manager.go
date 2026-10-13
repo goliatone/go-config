@@ -430,10 +430,7 @@ func (c *Container[C]) load(ctx context.Context) error {
 	// run all solvers
 	effectiveSolvers := c.effectiveSolvers()
 	if len(effectiveSolvers) > 0 {
-		maxPasses := c.solverPasses
-		if maxPasses < 1 {
-			maxPasses = 1
-		}
+		maxPasses := max(c.solverPasses, 1)
 		for pass := 0; pass < maxPasses; pass++ {
 			before, ok := snapshotConfig(c.K)
 			for _, solver := range effectiveSolvers {

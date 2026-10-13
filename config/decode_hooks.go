@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	optionalBoolType    = reflect.TypeOf(OptionalBool{})
-	optionalBoolPtrType = reflect.TypeOf(&OptionalBool{})
+	optionalBoolType    = reflect.TypeFor[OptionalBool]()
+	optionalBoolPtrType = reflect.TypeFor[*OptionalBool]()
 )
 
 // optionalBoolDecodeHook normalises data destined for OptionalBool fields so providers can

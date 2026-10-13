@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	copystructure.Copiers[reflect.TypeOf(OptionalBool{})] = func(v any) (any, error) {
+	copystructure.Copiers[reflect.TypeFor[OptionalBool]()] = func(v any) (any, error) {
 		ob := v.(OptionalBool)
 		clone := OptionalBool{}
 		if ob.IsSet() {
@@ -20,7 +20,7 @@ func init() {
 		}
 		return clone, nil
 	}
-	copystructure.Copiers[reflect.TypeOf(&OptionalBool{})] = func(v any) (any, error) {
+	copystructure.Copiers[reflect.TypeFor[*OptionalBool]()] = func(v any) (any, error) {
 		if v == nil {
 			return (*OptionalBool)(nil), nil
 		}

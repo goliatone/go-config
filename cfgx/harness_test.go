@@ -12,7 +12,6 @@ type testCase struct {
 func runTestCases(t *testing.T, cases []testCase) {
 	t.Helper()
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.run == nil {
 				t.Skip("no-op test case")

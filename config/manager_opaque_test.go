@@ -22,7 +22,7 @@ func (v *ownedValue) Borrow() string               { return v.Payload }
 
 type ownedReader interface{ Borrow() string }
 
-func ownedPolicy(t reflect.Type) bool { return t == reflect.TypeOf((*ownedValue)(nil)) }
+func ownedPolicy(t reflect.Type) bool { return t == reflect.TypeFor[*ownedValue]() }
 
 type opaqueConfig struct {
 	Token  *ownedValue `koanf:"token"`

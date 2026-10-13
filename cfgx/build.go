@@ -262,7 +262,7 @@ func (b *builder[T]) composeDecodeHooks() mapstructure.DecodeHookFunc {
 
 func prepareDecodeTarget[T any](result *T) any {
 	val := reflect.ValueOf(result).Elem()
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			val.Set(reflect.New(val.Type().Elem()))
 		}

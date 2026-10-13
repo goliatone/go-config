@@ -111,7 +111,7 @@ func evalStruct(val reflect.Value) (any, error) {
 func evalSlice(val reflect.Value) (any, error) {
 	length := val.Len()
 	result := make([]any, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		evaluated, err := evalFuncFields(val.Index(i).Interface())
 		if err != nil {
 			return nil, err

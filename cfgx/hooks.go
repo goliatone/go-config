@@ -36,7 +36,7 @@ func RegisterOptionalBoolType(sample OptionalBool) {
 		panic("cfgx: nil sample provided to RegisterOptionalBoolType")
 	}
 	ptrType := reflect.TypeOf(sample)
-	if ptrType.Kind() != reflect.Ptr {
+	if ptrType.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("cfgx: RegisterOptionalBoolType expects pointer type, got %s", ptrType))
 	}
 	optBool.mu.Lock()

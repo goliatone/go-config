@@ -48,7 +48,7 @@ type defaultsCloner struct {
 	seen   map[referenceID]reflect.Value
 }
 
-var lockerType = reflect.TypeOf((*sync.Locker)(nil)).Elem()
+var lockerType = reflect.TypeFor[sync.Locker]()
 
 func (c *defaultsCloner) opaque(t reflect.Type) bool { return c.policy != nil && c.policy(t) }
 
