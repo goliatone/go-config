@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.15.1](https://github.com/goliatone/go-config/compare/v0.15.0...v0.15.1) - (2026-10-29)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Code quality ([27f2a7c](https://github.com/goliatone/go-config/commit/27f2a7c1dbad7e8731c15254f95fac33c22261ce))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.15.1 ([4439893](https://github.com/goliatone/go-config/commit/4439893b4e957e1e148916ce888ccc48918422af))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.15.0 ([afd06a7](https://github.com/goliatone/go-config/commit/afd06a7033c327a9aae4fd1d292b537d0ea4c305))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([19034fa](https://github.com/goliatone/go-config/commit/19034fa96dd9a91e304ddd671c24cd749aa82c80))  - (goliatone)
+- Update docs ([5700e36](https://github.com/goliatone/go-config/commit/5700e36504f7fdd8ef8839d396e7268d97fa8405))  - (goliatone)
+
 # [0.15.0](https://github.com/goliatone/go-config/compare/v0.14.0...v0.15.0) - (2026-10-12)
 
 ## <!-- 13 -->📦 Bumps
