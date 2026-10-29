@@ -1,13 +1,13 @@
 module github.com/goliatone/go-config
 
-go 1.24.10
+go 1.26.0
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.4.0
-	github.com/goliatone/go-errors v0.10.0
-	github.com/goliatone/go-logger v0.8.4
+	github.com/goliatone/go-errors v0.12.0
+	github.com/goliatone/go-logger v0.10.1
 	github.com/goliatone/go-masker v0.2.0
-	github.com/goliatone/go-options v0.7.1
+	github.com/goliatone/go-options v0.7.2
 	github.com/knadh/koanf/parsers/json v0.1.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/parsers/yaml v0.1.0
@@ -49,9 +49,9 @@ require (
 	github.com/tidwall/gjson v1.14.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
+	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
